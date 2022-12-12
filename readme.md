@@ -2,7 +2,10 @@
 
 Fine-tuning [OpenAI Whisper](https://github.com/openai/whisper) model for Belarusian language during 
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event)
-hold by HuggingFace x Lambda.
+hosted by HuggingFace x Lambda.
+
+The code in this repository is a modified version of code from 
+[Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event) repo.
 
 ## Fine-tuning todos:
 * [ ] upload checkpoints & logs to HF
