@@ -23,8 +23,11 @@ with 🤗 Datasets' streaming mode.
 import logging
 import os
 import sys
+import re
+import regex
+import unicodedata
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Iterable
 
 import datasets
 import torch
@@ -45,7 +48,6 @@ from transformers import (
     TrainerCallback,
     set_seed,
 )
-from transformers.models.whisper.english_normalizer import BasicTextNormalizer
 from transformers.trainer_pt_utils import IterableDatasetShard
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version, send_example_telemetry
@@ -132,10 +134,6 @@ class DataTrainingArguments:
     )
     dataset_config_name: Optional[str] = field(
         default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
-    )
-    text_column: Optional[str] = field(
-        default=None,
-        metadata={"help": "The name of the column in the datasets containing the full texts (for summarization)."},
     )
     max_train_samples: Optional[int] = field(
         default=None,
@@ -227,6 +225,42 @@ class DataTrainingArguments:
     )
 
 
+class BelarusianTextNormalizer:
+    """
+    Based on transformers.models.whisper.english_normalizer.BasicTextNormalizer
+    but with support not to remove certain characters.
+    e.g. apostrophe (') - a symbol from Belarusian alphabet - was removed using BasicTextNormalizer.
+    """
+
+    def __init__(self, split_letters: bool = False):
+        self.split_letters = split_letters
+        self.allowed_symbols = ("'",)
+
+    @staticmethod
+    def clean(s: str, allowed_symbols: Iterable[str] = None):
+        """
+        Replace any other markers, symbols, punctuations with a space, keeping diacritics
+        """
+        if allowed_symbols is None:
+            allowed_symbols = []
+        res = "".join(" " if unicodedata.category(c)[0] in "MSP" and c not in allowed_symbols else c 
+                      for c in unicodedata.normalize("NFKC", s))
+        return res
+
+    def __call__(self, s: str):
+        s = s.lower()
+        s = re.sub(r"[<\[][^>\]]*[>\]]", "", s)  # remove words between brackets
+        s = re.sub(r"\(([^)]+?)\)", "", s)  # remove words between parenthesis
+        s = self.clean(s, allowed_symbols=self.allowed_symbols).lower()
+
+        if self.split_letters:
+            s = " ".join(regex.findall(r"\X", s, regex.U))
+
+        s = re.sub(r"\s+", " ", s)  # replace any successive whitespace characters with a space
+
+        return s
+
+
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
     """
@@ -300,9 +334,6 @@ def main():
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
-    # Sending telemetry. Tracking the example usage helps us better allocate resources to maintain them. The
-    # information sent is the one passed as arguments along with your Python/PyTorch versions.
-    send_example_telemetry("run_speech_recognition_seq2seq_streaming", model_args, data_args)
 
     # 2. Setup logging
     logging.basicConfig(
@@ -436,23 +467,26 @@ def main():
         # We only need to set the task id when the language is specified (i.e. in a multilingual setting)
         tokenizer.set_prefix_tokens(language=data_args.language, task=data_args.task)
 
-    # 6. Resample speech dataset if necessary
-    dataset_sampling_rate = next(iter(raw_datasets.values())).features[data_args.audio_column_name].sampling_rate
-    if dataset_sampling_rate != feature_extractor.sampling_rate:
-        raw_datasets = raw_datasets.cast_column(
-            data_args.audio_column_name, datasets.features.Audio(sampling_rate=feature_extractor.sampling_rate)
+    # 6. Explicitly resample speech dataset
+    raw_datasets = raw_datasets.cast_column(
+        data_args.audio_column_name, datasets.features.Audio(
+            sampling_rate=feature_extractor.sampling_rate,
+            mono=True
         )
+    )
 
     # 7. Preprocessing the datasets.
     # We need to read the audio files as arrays and tokenize the targets.
     max_input_length = data_args.max_duration_in_seconds * feature_extractor.sampling_rate
     min_input_length = data_args.min_duration_in_seconds * feature_extractor.sampling_rate
+    max_labels_length = 448  # model.config.max_length
+
     audio_column_name = data_args.audio_column_name
     text_column_name = data_args.text_column_name
     model_input_name = feature_extractor.model_input_names[0]
     do_lower_case = data_args.do_lower_case
     do_remove_punctuation = data_args.do_remove_punctuation
-    normalizer = BasicTextNormalizer()  # 'official' text normalizer from OpenAI
+    normalizer = BelarusianTextNormalizer()  # custom normalizer based on 'official' text normalizer from OpenAI
 
     if data_args.max_train_samples is not None:
         raw_datasets["train"] = (
@@ -468,7 +502,7 @@ def main():
             else raw_datasets["eval"].select(range(data_args.max_eval_samples))
         )
 
-    def prepare_dataset(batch):
+    def prepare_dataset(batch, labels_max_len: int = None):
         # process audio
         sample = batch[audio_column_name]
         inputs = feature_extractor(sample["array"], sampling_rate=sample["sampling_rate"])
@@ -480,13 +514,30 @@ def main():
         input_str = batch[text_column_name].lower() if do_lower_case else batch[text_column_name]
         if do_remove_punctuation:
             input_str = normalizer(input_str).strip()
-        batch["labels"] = tokenizer(input_str).input_ids
+        batch['labels'] = tokenizer(input_str).input_ids
+        batch['labels_length'] = len(batch['labels'])  # include special characters
+
+        batch['labels_truncated'] = 0
+        # need to truncate validation and test labels that are longer that model.config.max_length.
+        # can't drop such examples because this will affect validation and test scores.
+        # thus need to truncate.
+        if labels_max_len is not None:
+            if len(batch['labels']) > labels_max_len:
+                batch['labels'] = batch['labels'][:labels_max_len]
+                batch['labels_truncated'] = 1
+
         return batch
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
-        vectorized_datasets = raw_datasets.map(
-            prepare_dataset,
-            remove_columns=raw_datasets_features,
+        vectorized_datasets = IterableDatasetDict()
+
+        vectorized_datasets['train'] = raw_datasets['train'].map(
+            prepare_dataset, remove_columns=raw_datasets_features,
+            fn_kwargs=dict(labels_max_len=None), 
+        ).with_format("torch")
+        vectorized_datasets['eval'] = raw_datasets['eval'].map(
+            prepare_dataset, remove_columns=raw_datasets_features,
+            fn_kwargs=dict(labels_max_len=max_labels_length), 
         ).with_format("torch")
 
         if training_args.do_train and data_args.streaming:
@@ -496,15 +547,25 @@ def main():
                 seed=training_args.seed,
             )
 
-    # filter training data that is shorter than min_input_length or longer than
-    # max_input_length
+    # Filter training data that is shorter than min_input_length or longer than max_input_length.
+    # Drop items with labels longer that max model length.
+    # Drop such items from the train set only. Should keep them in eval set not to affect eval metrics.
     def is_audio_in_length_range(length):
         return min_input_length < length < max_input_length
 
+    def are_labels_in_length_range(labels_length):
+        return labels_length <= max_labels_length
+
     if training_args.do_train:
+        # Filter items from train set only. 
+        # Should keep them in eval set not to affect eval metrics.
         vectorized_datasets["train"] = vectorized_datasets["train"].filter(
             is_audio_in_length_range,
             input_columns=["input_length"],
+        )
+        vectorized_datasets["train"] = vectorized_datasets["train"].filter(
+            are_labels_in_length_range,
+            input_columns=["labels_length"],
         )
 
     # 8. Load Metric
@@ -562,7 +623,7 @@ def main():
         args=training_args,
         train_dataset=vectorized_datasets["train"] if training_args.do_train else None,
         eval_dataset=vectorized_datasets["eval"] if training_args.do_eval else None,
-        tokenizer=feature_extractor,
+        tokenizer=processor,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
         callbacks=[ShuffleCallback()] if data_args.streaming else None,
