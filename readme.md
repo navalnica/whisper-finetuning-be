@@ -8,6 +8,9 @@ The code in this repository is a modified version of code from
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event) repo.
 
 ## Fine-tuning todos:
+* Learning rate:
+  * max learning rate is not the same as LR passed as a parameter to training script. it is actually lower.
+  * when resuming training, LR scheduling behaves incorrectly
 * perform evaluation of fine-tuned model on CommonVoice test set
 * check exact sizes of train, eval, test sets of CommonVoice 11
 
@@ -21,9 +24,11 @@ When resuming training from existing checkpoint:
     previously save (need to investifate further. but such happened already)
 * learning rate gets reset if passing same parameter value to training script as in previour run.<br>
   need to provide learning rate from the last step of previous run to continue
-  training in a correct way.<br>
-  however even if passing learning rate from the last step, in the new run it has different value than expected
-  (probably because of warmup).
+  training in a correct way
+  * however even if passing learning rate from the last step, in the new run it has different value than expected
+    * probably because last checkpont was chosen incorrectly
+    * or learning rate is treated as a starting learning rate at step 0 and not on step X (where we resume).<br>
+      need to try to pass same LR that was passes as a starting LR to the very first run
 * it's unclear whether decision on saving current model
   is made by comparing current metrics with metrics of the best checkpoint. I guess model with worse performance
   will not overwrite best model checkpoint already exising in the output dir, but need to double check.
