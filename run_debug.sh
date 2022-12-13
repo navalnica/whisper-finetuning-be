@@ -7,7 +7,7 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--eval_split_name="validation" \
 	--model_index_name="Whisper Tiny Belarusian" \
 	\
-	--max_steps="200" \
+	--max_steps="300" \
 	--max_eval_samples="64" \
 	--output_dir="./" \
 	--per_device_train_batch_size="32" \
@@ -35,7 +35,6 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	\
 	--do_train \
 	--do_eval \
-	--overwrite_output_dir \
 	--ignore_data_skip \
 	--predict_with_generate \
 	--do_normalize_eval \
