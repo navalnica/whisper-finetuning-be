@@ -4,6 +4,8 @@ sudo apt install -y ffmpeg
 
 sudo apt-get install git-lfs
 
+sudo apt-get install tmux
+
 python3 -m venv hf_env
 source hf_env/bin/activate
 echo "source ~/hf_env/bin/activate" >> ~/.bashrc
