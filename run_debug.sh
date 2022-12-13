@@ -34,7 +34,6 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	\
 	--do_train \
 	--do_eval \
-	--resume_from_checkpoint="." \
 	--ignore_data_skip \
 	--predict_with_generate \
 	--do_normalize_eval \

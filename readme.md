@@ -13,6 +13,12 @@ The code in this repository is a modified version of code from
 
 ## Resuming training from exising checkpoint
 When resuming training from existing checkpoint:
+* it's better to save all `checkpoint-\d+` dirs. better not to rely on data saved to `output_dir` because:
+  * not all data is saved to `output_dir`. e.g. following files are not saved to `output_dir`: 
+    `optimizer.pt`, `rng_state.pth`, `scaler.pt`, `scheduler.pt`. so can't resume training in a correct way from
+    data saved to `output_dir`
+  * when resuming training from `output_dir` as a checkpoint dir, model saved to `output_dir` can be worse than
+    previously save (need to investifate further. but such happened already)
 * learning rate gets reset if passing same parameter value to training script as in previour run.<br>
   need to provide learning rate from the last step of previous run to continue
   training in a correct way.<br>
