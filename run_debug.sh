@@ -13,8 +13,8 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--per_device_train_batch_size="32" \
 	--per_device_eval_batch_size="32" \
 	--logging_steps="10" \
-	--learning_rate="1e-5" \
-	--warmup_steps="0" \
+	--learning_rate="1e-4" \
+	--warmup_steps="10" \
 	--evaluation_strategy="steps" \
 	--eval_steps="10" \
 	--save_strategy="steps" \
