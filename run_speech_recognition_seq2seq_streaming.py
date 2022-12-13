@@ -337,7 +337,7 @@ def main():
 
 
     # 2. Setup logging
-    now_str = datetime.datetime.now().strftim('%Y%m%d-%H%M%S')
+    now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
