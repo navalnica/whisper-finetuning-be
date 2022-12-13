@@ -368,28 +368,42 @@ def main():
         logger.info(f'output_dir already exists. will try to load last checkpoint.')
         
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None:
-            logger.info('last_checkpoint is None. will try to read from the model saved in the root of output_dir.')
-
-            dir_content = os.listdir(training_args.output_dir)
-            if len(dir_content) == 0:
-                logger.info('output_dir is empty. can not resume training. will start training from scratch.')
+        if last_checkpoint is not None:
+            if training_args.resume_from_checkpoint is None:
+                logger.info(
+                    f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+                    "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
+                )
             else:
-                model_fn = 'pytorch_model.bin'
-                if model_fn in dir_content:
-                    logger.info(f'found {model_fn} inside output_dir. '
-                                f'will continue training treating output_dir as a last checkpoint.')
-                    last_checkpoint = training_args.output_dir
+                logger.info(f'Last checkpoint found at: {last_checkpoint}. Will ignore it and resume training '
+                            f'from passed resume_from_checkpoint param: {training_args.resume_from_checkpoint}')
+                assert os.path.isdir(training_args.resume_from_checkpoint)
+        else:    
+            logger.info('last_checkpoint is None. will try to read from training_args.resume_from_checkpoint')
+            
+            if training_args.resume_from_checkpoint is not None and os.path.isdir(training_args.resume_from_checkpoint):
+                logger.info(f'Will resume training from  passed resume_from_checkpoint param: '
+                            f'{training_args.resume_from_checkpoint}')
+            else:
+                logger.info('last_checkpoint is None. resume_from_checkpoint is either None or not existing dir. '
+                            'will try to read from the model saved in the root of output_dir.')
+
+                dir_content = os.listdir(training_args.output_dir)
+                if len(dir_content) == 0:
+                    logger.info('output_dir is empty. will start training from scratch.')                    
                 else:
-                    raise ValueError(
-                        f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                        "Use --overwrite_output_dir to overcome."
-                    )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-            logger.info(
-                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-                "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
-            )
+                    model_fn = 'pytorch_model.bin'
+                    if model_fn in dir_content:
+                        logger.info(f'found {model_fn} inside output_dir. '
+                                    f'will continue training treating output_dir as a last checkpoint.')
+                        last_checkpoint = training_args.output_dir
+                    else:
+                        raise ValueError(
+                            f'Could not find last_checkpoint, resume_from_checkpoint is either None '
+                            'or not existing dir, output_dir is non-empty but does not contain a model.'
+                            'Use --overwrite_output_dir to overcome.'
+                        )
+                        
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
