@@ -365,12 +365,26 @@ def main():
     # 3. Detecting last checkpoint and eventually continue from last checkpoint
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+        logger.info(f'output_dir already exists. will try to load last checkpoint.')
+        
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.output_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({training_args.output_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
-            )
+        if last_checkpoint is None:
+            logger.info('last_checkpoint is None. will try to read from the model saved in the root of output_dir.')
+
+            dir_content = os.listdir(training_args.output_dir)
+            if len(dir_content) == 0:
+                logger.info('output_dir is empty. can not resume training. will start training from scratch.')
+            else:
+                model_fn = 'pytorch_model.bin'
+                if model_fn in dir_content:
+                    logger.info(f'found {model_fn} inside output_dir. '
+                                f'will continue training treating output_dir as a last checkpoint.')
+                    last_checkpoint = training_args.output_dir
+                else:
+                    raise ValueError(
+                        f"Output directory ({training_args.output_dir}) already exists and is not empty. "
+                        "Use --overwrite_output_dir to overcome."
+                    )
         elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "

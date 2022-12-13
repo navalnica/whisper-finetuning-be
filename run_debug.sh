@@ -14,7 +14,7 @@ python run_speech_recognition_seq2seq_streaming.py \
 	--per_device_eval_batch_size="32" \
 	--logging_steps="10" \
 	--learning_rate="1e-5" \
-	--warmup_steps="5" \
+	--warmup_steps="0" \
 	--evaluation_strategy="steps" \
 	--eval_steps="10" \
 	--save_strategy="steps" \
@@ -34,6 +34,7 @@ python run_speech_recognition_seq2seq_streaming.py \
 	\
 	--do_train \
 	--do_eval \
+	--resume_from_checkpoint="." \
 	--ignore_data_skip \
 	--predict_with_generate \
 	--do_normalize_eval \
