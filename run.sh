@@ -1,4 +1,4 @@
-python run_speech_recognition_seq2seq_streaming.py \
+python src/run_speech_recognition_seq2seq_streaming.py \
 	--model_name_or_path="openai/whisper-small" \
 	--dataset_name="mozilla-foundation/common_voice_11_0" \
 	--dataset_config_name="be" \
