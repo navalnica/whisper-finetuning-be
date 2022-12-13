@@ -8,8 +8,8 @@ The code in this repository is a modified version of code from
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event) repo.
 
 ## Fine-tuning todos:
-* sync `run_debug.sh` with `run.sh`
 * perform evaluation of fine-tuned model on CommonVoice test set
+* check exact sizes of train, eval, test sets of CommonVoice 11
 
 ## Resuming training from exising checkpoint
 When resuming training from existing checkpoint:
@@ -50,7 +50,9 @@ When resuming training from existing checkpoint:
   it's likely they are going to be large - thus pre-download of these sets might not reduce 
   overall fine-tuning time compared to streaming mode.
 * size of train set is ~370'000 audiofiles. if using `batch_size=64`, then
-  1 epoch will have ~5782 steps.
+  1 epoch will have ~5782 steps. <br>
+  Because of `--eval_steps="1000"` will use `--max_steps="6000"` instead of `--max_steps="5800"`
+  to have evaluation metrics computed in the end of training.
 * if using Google Colab, need to execute  `sudo chmod -R 777 .git` inside hf repo to 
   to set right permissions to be able to push trained models to HuggingFace Hub
 * Whispers BasicTextNormalizer splits words containing apostrophe:
