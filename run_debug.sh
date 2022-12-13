@@ -5,15 +5,15 @@ python run_speech_recognition_seq2seq_streaming.py \
 	--language="be" \
 	--train_split_name="train" \
 	--eval_split_name="validation" \
-	--model_index_name="Whisper Small Belarusian" \
+	--model_index_name="Whisper Tiny Belarusian" \
 	\
-	--max_steps="150" \
+	--max_steps="200" \
 	--max_eval_samples="64" \
 	--output_dir="./" \
 	--per_device_train_batch_size="32" \
 	--per_device_eval_batch_size="32" \
 	--logging_steps="10" \
-	--learning_rate="3.1578947368421056e-06" \
+	--learning_rate="1e-5" \
 	--warmup_steps="5" \
 	--evaluation_strategy="steps" \
 	--eval_steps="10" \

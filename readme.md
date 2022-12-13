@@ -13,9 +13,11 @@ The code in this repository is a modified version of code from
 
 ## Resuming training from exising checkpoint
 When resuming training from existing checkpoint:
-* learning rate gets reset if passing same paras to training script.<br>
+* learning rate gets reset if passing same parameter value to training script as in previour run.<br>
   need to provide learning rate from the last step of previous run to continue
-  training in a correct way.
+  training in a correct way.<br>
+  however even if passing learning rate from the last step, in the new run it has different value than expected
+  (probably because of warmup).
 * it's unclear whether decision on saving current model
   is made by comparing current metrics with metrics of the best checkpoint. I guess model with worse performance
   will not overwrite best model checkpoint already exising in the output dir, but need to double check.
@@ -47,6 +49,8 @@ When resuming training from existing checkpoint:
   but the size of validation and test sets are unknown (need to check).
   it's likely they are going to be large - thus pre-download of these sets might not reduce 
   overall fine-tuning time compared to streaming mode.
+* size of train set is ~370'000 audiofiles. if using `batch_size=64`, then
+  1 epoch will have ~5782 steps.
 * if using Google Colab, need to execute  `sudo chmod -R 777 .git` inside hf repo to 
   to set right permissions to be able to push trained models to HuggingFace Hub
 * Whispers BasicTextNormalizer splits words containing apostrophe:
