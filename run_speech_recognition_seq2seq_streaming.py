@@ -23,6 +23,7 @@ with 🤗 Datasets' streaming mode.
 import logging
 import os
 import sys
+import datetime
 import re
 import regex
 import unicodedata
@@ -336,10 +337,14 @@ def main():
 
 
     # 2. Setup logging
+    now_str = datetime.datetime.now().strftim('%Y%m%d-%H%M%S')
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            logging.FileHandler(filename=f'train_{now_str}.log', mode='w')
+        ],
     )
     log_level = training_args.get_process_log_level()
     logger.setLevel(log_level)
