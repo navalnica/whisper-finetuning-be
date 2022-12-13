@@ -30,6 +30,10 @@ When resuming training from existing checkpoint:
       if not, the same elements from the same epoch will be passed to a model again.
 
 ## Questions:
+* What checkpoint (best, I guess) is saved in the `output_dir`? 
+  How is it overwritten when resuming training from existing checkpoint?
+
+### Prepended tokens
 * Why are there following lines in Data Collator?
   ```python
     # if bos token is appended in previous tokenization step,
@@ -39,8 +43,29 @@ When resuming training from existing checkpoint:
     ```
 * `tokenizer.bos_token_id` vs `model.config.decoder_start_token_id`.<br>
   which one to pass to Data Collator as `decoder_start_token_id` parameter?
-* What checkpoint (best, I guess) is saved in the `output_dir`? 
-  How is it overwritten when resuming training from existing checkpoint?
+* Answer:
+  * In this case, the two are equivalent. You can verify this:
+    ```python
+    print(tokenizer.bos_token_id)
+    print(model.config.decoder_start_token_id)
+    ```
+
+  * Print Output:
+    ```
+    <|startoftranscript|>
+    <|startoftranscript|>
+    ```
+
+  * Technically speaking, the decoder_start_token_id is the correct convention here. Before starting generating any tokens, we initialise the generate method with a starting token, which is the decoder_start_token_id. 
+  See: https://huggingface.co/blog/how-to-generate. The decoder_start_token_id corresponds to the initial context word sequence, and is the zero'th token generated.
+
+  * We remove this token from the encoded labels in the data collator because we always set the zero'th generated token to the decoder_start_token_id. If we leave the decoder_start_token_id as part of the label sequence, then we'll predict the decoder_start_token_id as the zero'th token, and again as the first token! Because we're always forcing it as the zero'th token, we don't need to predict it as the first token, and so we remove it from the target lables
+
+  * These tokens are not forced in the generation process, and so we don't cut them in the data collator. We need to provide them to the model as target labels so that the model can learn the correct tasks from our data
+
+  * The tokens correspond to the audio language, task (translate or transcribe) and whether to predict timestamps
+
+  * We need to tell the model what language the audio corresponds to and what task it's performing during fine-tuning. This way, it learns what audio corresponds to what language, and the difference between transcribing audio vs translating it 
 
 ## Notes:
 * using CommonVoice 11 dataset in a streaming way.<br>
