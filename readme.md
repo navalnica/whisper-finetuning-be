@@ -7,11 +7,18 @@ hosted by HuggingFace x Lambda.
 The code in this repository is a modified version of code from 
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event) repo.
 
+## Tips:
+* start with a port worwarding to monitor Tensorboard logs on local computer:
+  ```
+  ssh <remote-address> -L <local_port>:localhost:<remote_tensorboard_port>
+  ```
+* Train with redirecting output to a file using `tee`
+
 ## Fine-tuning todos:
+* perform evaluation of fine-tuned model on CommonVoice test set
 * Learning rate:
   * max learning rate is not the same as LR passed as a parameter to training script. it is actually lower.
   * when resuming training, LR scheduling behaves incorrectly
-* perform evaluation of fine-tuned model on CommonVoice test set
 * check exact sizes of train, eval, test sets of CommonVoice 11
 
 ## Resuming training from exising checkpoint
