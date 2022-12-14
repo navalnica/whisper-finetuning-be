@@ -7,7 +7,7 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--eval_split_name="validation" \
 	--model_index_name="Whisper Small Belarusian" \
     \
-	--max_steps="6000" \
+	--max_steps="12000" \
 	--output_dir="./" \
 	--per_device_train_batch_size="64" \
 	--per_device_eval_batch_size="64" \
