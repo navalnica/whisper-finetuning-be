@@ -405,6 +405,8 @@ def main():
                     else:
                         allowed_dirs = ['.git', '.gitattributes', 'src']
                         unexpected_content = set(dir_content).difference(allowed_dirs)
+                        unexpected_content = [x for x in unexpected_content 
+                                              if not x.endswith('.log') and os.path.isfile(x)]
                         if len(unexpected_content) > 0:
                             raise ValueError(
                                 f'Could not find last_checkpoint, resume_from_checkpoint is either None '
