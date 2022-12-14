@@ -50,6 +50,8 @@ When resuming training from existing checkpoint:
 ## Questions:
 * What checkpoint (best, I guess) is saved in the `output_dir`? 
   How is it overwritten when resuming training from existing checkpoint?
+* does `ShuffleCallback` work with StreamingDataset? it reshuffles data `on_epoch_begin()`,
+  but does StreamingDataset have any epochs?
 
 ### Prepended tokens
 * Why are there following lines in Data Collator?
