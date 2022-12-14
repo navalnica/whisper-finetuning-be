@@ -12,7 +12,10 @@ The code in this repository is a modified version of code from
   ```
   ssh <remote-address> -L <local_port>:localhost:<remote_tensorboard_port>
   ```
-* Train with redirecting output to a file using `tee`
+* Train with redirecting output to a file using `tee`:
+  ```
+  source src/run.sh 2>&1 | tee train_run_<run_number>.log
+  ```
 
 ## Fine-tuning todos:
 * perform evaluation of fine-tuned model on CommonVoice test set

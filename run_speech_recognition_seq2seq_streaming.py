@@ -403,11 +403,18 @@ def main():
                                     f'will continue training treating output_dir as a last checkpoint.')
                         last_checkpoint = training_args.output_dir
                     else:
-                        raise ValueError(
-                            f'Could not find last_checkpoint, resume_from_checkpoint is either None '
-                            'or not existing dir, output_dir is non-empty but does not contain a model.'
-                            'Use --overwrite_output_dir to overcome.'
-                        )
+                        allowed_dirs = ['.git', '.gitattributes', 'src']
+                        unexpected_content = set(dir_content).difference(allowed_dirs)
+                        if len(unexpected_content) > 0:
+                            raise ValueError(
+                                f'Could not find last_checkpoint, resume_from_checkpoint is either None '
+                                'or not existing dir, output_dir is non-empty but does not contain a model.'
+                                'Use --overwrite_output_dir to overcome. '
+                                f'unexpected_content: {unexpected_content}'
+                            )
+                        else:
+                            logger.info(f'dir is not empty, but contains only: {dir_content}. '
+                                        'it is OK - will start training')
                         
 
     # Set seed before initializing model.
