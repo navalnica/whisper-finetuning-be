@@ -6,12 +6,20 @@ sudo apt-get install git-lfs
 
 sudo apt-get install tmux
 
-python3 -m venv hf_env
-source hf_env/bin/activate
-echo "source ~/hf_env/bin/activate" >> ~/.bashrc
+cd ~
+echo "executing env setup from $(pwd)"
 
-git clone https://github.com/huggingface/community-events.git
-pip install -r community-events/whisper-fine-tuning-event/requirements.txt
+python3 -m venv ~/python_venvs/hf_env
+source ~/python_venvs/hf_env/bin/activate
+echo "source ~/python_venvs/hf_env/bin/activate" >> ~/.bashrc
+
+git clone https://github.com/yks72p/whisper-finetuning-be
+pip install -r ~/whisper-finetuning-be/requirements.txt
 
 git config --global credential.helper store
 huggingface-cli login
+
+echo "env setup"
+echo "! PLEASE LOGIN INTO GIT TO BE ABLE TO PUSH TO HF HUB !"
+echo "> git config --globase user.name <user_name>"
+echo "> git config --globase user.email <user_email>"
