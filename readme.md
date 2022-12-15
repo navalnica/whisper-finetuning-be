@@ -92,13 +92,47 @@ When resuming training from existing checkpoint:
 * Default Linear scheduler is used 
 * Default Adam optimizer is used
 
-### Long evalutaion compared to training:
+### Logs not printed when expected
+* Train logs are printed only before start of a validation. 
+  During training they are not printed to a stdout.
+  All worked fine in a Colab.
+* No progressbar for validation (at least when using streaming and iterable dataset). 
+  possible reason is that when using streaming, the dataset len in unknown.
+* Evaluation metrics get printed to stdout only before the next validation call.
+  All worked fine in a Colab.
+* Possible reason: usage of `... | tee file.log`. But it's unlikely
+
+### Text normalization
+* Whispers BasicTextNormalizer splits words containing apostrophe:
+  ```python
+  > from transformers.models.whisper.english_normalizer import BasicTextNormalizer
+  > normalizer = BasicTextNormalizer()
+  > normalizer("раз'яднаць")
+  'раз яднаць'
+  ```
+* That's why `BelarusianTextNormalizer` (edited version of `BasicTextNormalizer`) was added to training script:
+  ```python
+  > from run_speech_recognition_seq2seq_streaming import BelarusianTextNormalizer
+  > normalizer_be = BelarusianTextNormalizer()
+  > normalizer_be("раз'яднаць")
+  "раз'яднаць"
+  ```
+
+### Different batch sizes for train and evaluation:
 * Theoretically you can use a larger batch size for evaluation vs training! 
 * Training: we do a forward pass, storing all the activations, and then a backwards pass, storing all the gradients
 * Inference (evaluation): we only do a forward pass, and don't store any activations
-* So the memory required for evaluation is much lower than it is for training (we're only doing the forward pass and not storing any values) 
-* In my experience, altering the eval batch size has little effect on eval speed -> I set it to a lower value as this tends to give a more responsive progress bar when evaluating in non-streaming mode (the bar updates faster and more frequently) 
-* Note that 1 evaluation step **will take much longer** than 1 training step, even with the same batch size.<br>
+* So the memory required for evaluation is much lower than it is for training 
+  (we're only doing the forward pass and not storing any values) 
+* In my experience, altering the eval batch size has little effect on eval speed -> 
+  I set it to a lower value as this tends to give a more responsive progress bar 
+  when evaluating in non-streaming mode (the bar updates faster and more frequently) 
+
+### Slow inference. Long evalutaion compared to training:
+* Slower inference is an inherent limitation of the sequence-to-sequence architecture. 
+  The auto-regressive decoding means that you have to do as many decoder forward passes as tokens generated. 
+* This is much slower than CTC, where you do a single encoder forward pass
+* Note that 1 evaluation step **will take much longer** than 1 training step, even with the same batch sizes.
   * With training, we do one forward pass of the encoder, one forward pass of the decoder, 
     one backward pass of the decoder and one backward pass of the encoder (=4 passes total):<br>
     ```
@@ -121,29 +155,22 @@ When resuming training from existing checkpoint:
   * Since we just do a forward pass, we could even run eval with a batch size of 1 and get exactly the same results!
   * Because we don't get much of an improvement with batch sizes beyond around 8, it's set somewhat arbitrarily
 
-### Logs not printes when expected
-* Train logs are printed only before start of a validation. During training they are not printed to a stdout.
-  All worked fine in a Colab.
-* No progressbar for validation (at least when using streaming and iterable dataset). 
-  possible reason is that when using streaming, the dataset len in unknown.
-* Evaluation metrics are not printed to stdout in bash. They were printed to stdout in Colab.
-* Possible reason: usage of `... | tee file.log`. But it's unlikely
+### Ways to decrease evaluation time during fine-tuning:
+* reduce `generation_max_length` param:
+  * During training, we can limit the generation max length to a lower number to cut-off the generation 
+    after fewer tokens (e.g. 40). This will give worse results during training, 
+    but we can still infer the evolution of WER performance over training. 
+  * For the final eval step, we can bump up the generation max length back up to 448. 
+  * WER performance varies monotonically with generation max length 
+    (WER can only stay equal or improve by increasing generation max length), 
+    so we know that our final eval WER will be less than (improved) or equal to the WER during training
+* We can evaluate at less frequent eval_steps: this reduces the number of times we have to perform evaluation
 
-### Text normalization
-* Whispers BasicTextNormalizer splits words containing apostrophe:
-  ```python
-  > from transformers.models.whisper.english_normalizer import BasicTextNormalizer
-  > normalizer = BasicTextNormalizer()
-  > normalizer("раз'яднаць")
-  'раз яднаць'
-  ```
-* That's why `BelarusianTextNormalizer` (edited version of `BasicTextNormalizer`) was added to training script:
-  ```python
-  > from run_speech_recognition_seq2seq_streaming import BelarusianTextNormalizer
-  > normalizer_be = BelarusianTextNormalizer()
-  > normalizer_be("раз'яднаць")
-  "раз'яднаць"
-  ```
+### Decrease inference time more generally
+* PyTorch 2.0 and compiling the model could get you a decent speed-up 
+  (https://pytorch.org/blog/Accelerating-Hugging-Face-and-TIMM-models/#hugging-face-models)
+* Downcasting to fp16
+
 ### Memory saving and training larger models:
 To save memory (and increase either model or batch_size) can experiment with:
 * using Adafactor instead of Adam.
@@ -153,7 +180,26 @@ To save memory (and increase either model or batch_size) can experiment with:
 * using Adam 8bit from `bitsandbytes` module. 
   need to provide `optim="adamw_bnb_8bit"` param to `Seq2SeqTrainingArguments`
 * use `deepspeed`. scripts are there in 
- [Whisper fine-tuning Event repo](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event)
+  [Whisper fine-tuning Event repo](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event)
+* load the model and processor in 8bit mode:
+  ```python
+  from transformers import WhisperForConditionalGeneration, WhisperProcessor
+  model = WhisperForConditionalGeneration.from_pretrained("openai/whisper-large", device_map="auto", load_in_8bit=True)
+  processor = WhisperProcessor.from_pretrained("openai/whisper-large", load_in_8bit=True)
+  ```
+  inference loop:
+  ```python
+  for data in dataset:
+    inputs = processor.feature_extractor(data["audio"]["array"], return_tensors="pt", sampling_rate=16_000).input_features.half().to(device)
+    forced_decoder_ids = processor.get_decoder_prompt_ids(language="en", task="transcribe")
+    predicted_ids = model.generate(inputs, forced_decoder_ids=forced_decoder_ids)
+    text = processor.tokenizer.batch_decode(predicted_ids, skip_special_tokens=True, normalize=False)[0]
+    print(text)
+  ```
+  * 8bit will slower iference compared to full/half-precision
+  * But the memory saving you get is immense (up to 4x vs full-precision).<br>
+    This is the recommended approach when you're limited on VRAM.<br>
+    If you care about inference speed, still to full precision
 
 ### Prepended tokens
 * Why are there following lines in Data Collator?
