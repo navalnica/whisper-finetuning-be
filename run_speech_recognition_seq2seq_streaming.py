@@ -544,43 +544,55 @@ def main():
             else raw_datasets["eval"].select(range(data_args.max_eval_samples))
         )
 
-    def prepare_dataset(batch, labels_max_len: int = None):
+    def prepare_dataset(sample: dict, labels_max_len: int = None):
         # process audio
-        sample = batch[audio_column_name]
+        sample = sample[audio_column_name]
         inputs = feature_extractor(sample["array"], sampling_rate=sample["sampling_rate"])
         # process audio length
-        batch[model_input_name] = inputs.get(model_input_name)[0]
-        batch["input_length"] = len(sample["array"])
+        sample[model_input_name] = inputs.get(model_input_name)[0]
+        sample["input_length"] = len(sample["array"])
 
         # process targets
-        input_str = batch[text_column_name].lower() if do_lower_case else batch[text_column_name]
+        input_str = sample[text_column_name].lower() if do_lower_case else sample[text_column_name]
         if do_remove_punctuation:
             input_str = normalizer(input_str).strip()
-        batch['labels'] = tokenizer(input_str).input_ids
-        batch['labels_length'] = len(batch['labels'])  # include special characters
+        sample['labels'] = tokenizer(input_str).input_ids
+        sample['labels_length'] = len(sample['labels'])  # include special characters
 
-        batch['labels_truncated'] = 0
+        sample['labels_truncated'] = 0
         # need to truncate validation and test labels that are longer that model.config.max_length.
         # can't drop such examples because this will affect validation and test scores.
         # thus need to truncate.
         if labels_max_len is not None:
-            if len(batch['labels']) > labels_max_len:
-                batch['labels'] = batch['labels'][:labels_max_len]
-                batch['labels_truncated'] = 1
+            if len(sample['labels']) > labels_max_len:
+                sample['labels'] = sample['labels'][:labels_max_len]
+                sample['labels_truncated'] = 1
 
-        return batch
+        return sample
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
-        vectorized_datasets = IterableDatasetDict()
+        vectorized_datasets = IterableDatasetDict() if data_args.streaming else DatasetDict()
 
-        vectorized_datasets['train'] = raw_datasets['train'].map(
-            prepare_dataset, remove_columns=raw_datasets_features,
-            fn_kwargs=dict(labels_max_len=None), 
-        ).with_format("torch")
-        vectorized_datasets['eval'] = raw_datasets['eval'].map(
-            prepare_dataset, remove_columns=raw_datasets_features,
-            fn_kwargs=dict(labels_max_len=max_labels_length), 
-        ).with_format("torch")
+        if data_args.streaming:
+            vectorized_datasets['train'] = raw_datasets['train'].map(
+                prepare_dataset, remove_columns=raw_datasets_features,
+                fn_kwargs=dict(labels_max_len=None),
+            ).with_format("torch")
+            vectorized_datasets['eval'] = raw_datasets['eval'].map(
+                prepare_dataset, remove_columns=raw_datasets_features,
+                fn_kwargs=dict(labels_max_len=max_labels_length),
+            ).with_format("torch")
+        else:
+            vectorized_datasets['train'] = raw_datasets['train'].map(
+                prepare_dataset, remove_columns=raw_datasets_features,
+                fn_kwargs=dict(labels_max_len=None),
+                num_proc=4
+            ).with_format("torch")
+            vectorized_datasets['eval'] = raw_datasets['eval'].map(
+                prepare_dataset, remove_columns=raw_datasets_features,
+                fn_kwargs=dict(labels_max_len=max_labels_length),
+                num_proc=4
+            ).with_format("torch")
 
         if training_args.do_train and data_args.streaming:
             # manually shuffle if streaming (done by the trainer for non-streaming)
