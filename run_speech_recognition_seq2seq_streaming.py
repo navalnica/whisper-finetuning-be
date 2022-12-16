@@ -657,6 +657,8 @@ def main():
             if isinstance(train_dataloader.dataset, IterableDatasetShard):
                 pass  # set_epoch() is handled by the Trainer
             elif isinstance(train_dataloader.dataset, IterableDataset):
+                logger.info(f'ShuffleCallback. shuffling train dataset. '
+                            f'seed: {training_args.seed}. dataset epoch: {train_dataloader.dataset._epoch}')
                 train_dataloader.dataset.set_epoch(train_dataloader.dataset._epoch + 1)
 
     # Initialize Trainer
