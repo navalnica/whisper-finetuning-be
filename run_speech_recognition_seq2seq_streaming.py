@@ -546,13 +546,13 @@ def main():
             else raw_datasets["eval"].select(range(data_args.max_eval_samples))
         )
 
-    def prepare_dataset(sample: dict, labels_max_len: int = None):
+    def prepare_dataset(sample, labels_max_len: int = None):
         # process audio
-        sample = sample[audio_column_name]
-        inputs = feature_extractor(sample["array"], sampling_rate=sample["sampling_rate"])
+        audio = sample[audio_column_name]
+        inputs = feature_extractor(audio["array"], sampling_rate=audio["sampling_rate"])
         # process audio length
         sample[model_input_name] = inputs.get(model_input_name)[0]
-        sample["input_length"] = len(sample["array"])
+        sample["input_length"] = len(audio["array"])
 
         # process targets
         input_str = sample[text_column_name].lower() if do_lower_case else sample[text_column_name]
