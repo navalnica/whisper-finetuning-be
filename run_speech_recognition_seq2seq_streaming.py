@@ -220,9 +220,13 @@ class DataTrainingArguments:
             )
         },
     )
-    streaming: bool = field(
+    streaming_train: bool = field(
         default=True,
-        metadata={"help": "Whether to use streaming mode to load and pre-process the data."},
+        metadata={"help": "Whether to use streaming mode to load and pre-process the train split."},
+    )
+    streaming_eval: bool = field(
+        default=True,
+        metadata={"help": "Whether to use streaming mode to load and pre-process the evaluation split."},
     )
 
 
@@ -425,27 +429,31 @@ def main():
     set_seed(training_args.seed)
 
     # 4. Load dataset
-    raw_datasets = IterableDatasetDict() if data_args.streaming else DatasetDict()
+
+    # TODO: replace dataset dicts with single key to IterableDataset and to Dataset.
+    # don't know how to do it know - using dict simply because they work.
+    raw_train = IterableDatasetDict() if data_args.streaming_train else DatasetDict()
+    raw_eval = IterableDatasetDict() if data_args.streaming_eval else DatasetDict()
 
     if training_args.do_train:
-        raw_datasets["train"] = load_maybe_streaming_dataset(
+        raw_train['train'] = load_maybe_streaming_dataset(
             data_args.dataset_name,
             data_args.dataset_config_name,
             split=data_args.train_split_name,
             use_auth_token=True if model_args.use_auth_token else None,
-            streaming=data_args.streaming,
+            streaming=data_args.streaming_train,
         )
 
     if training_args.do_eval:
-        raw_datasets["eval"] = load_maybe_streaming_dataset(
+        raw_eval['eval'] = load_maybe_streaming_dataset(
             data_args.dataset_name,
             data_args.dataset_config_name,
             split=data_args.eval_split_name,
             use_auth_token=True if model_args.use_auth_token else None,
-            streaming=data_args.streaming,
+            streaming=data_args.streaming_eval,
         )
 
-    raw_datasets_features = list(next(iter(raw_datasets.values())).features.keys())
+    raw_datasets_features = list(next(iter(raw_train.values())).features.keys())
 
     if data_args.audio_column_name not in raw_datasets_features:
         raise ValueError(
@@ -512,7 +520,13 @@ def main():
         tokenizer.set_prefix_tokens(language=data_args.language, task=data_args.task)
 
     # 6. Explicitly resample speech dataset
-    raw_datasets = raw_datasets.cast_column(
+    raw_train = raw_train.cast_column(
+        data_args.audio_column_name, datasets.features.Audio(
+            sampling_rate=feature_extractor.sampling_rate,
+            mono=True
+        )
+    )
+    raw_eval = raw_eval.cast_column(
         data_args.audio_column_name, datasets.features.Audio(
             sampling_rate=feature_extractor.sampling_rate,
             mono=True
@@ -533,17 +547,17 @@ def main():
     normalizer = BelarusianTextNormalizer()  # custom normalizer based on 'official' text normalizer from OpenAI
 
     if data_args.max_train_samples is not None:
-        raw_datasets["train"] = (
-            raw_datasets["train"].take(data_args.max_train_samples)
-            if data_args.streaming
-            else raw_datasets["train"].select(range(data_args.max_train_samples))
+        raw_train['train'] = (
+            raw_train['train'].take(data_args.max_train_samples)
+            if data_args.streaming_train
+            else raw_train['train'].select(range(data_args.max_train_samples))
         )
 
     if data_args.max_eval_samples is not None:
-        raw_datasets["eval"] = (
-            raw_datasets["eval"].take(data_args.max_eval_samples)
-            if data_args.streaming
-            else raw_datasets["eval"].select(range(data_args.max_eval_samples))
+        raw_eval['eval'] = (
+            raw_eval['eval'].take(data_args.max_eval_samples)
+            if data_args.streaming_eval
+            else raw_eval['eval'].select(range(data_args.max_eval_samples))
         )
 
     def prepare_dataset(sample, labels_max_len: int = None):
@@ -575,36 +589,42 @@ def main():
     with training_args.main_process_first(desc="dataset map pre-processing"):
         logger.info(f'vectorizing dataset')
 
-        vectorized_datasets = IterableDatasetDict() if data_args.streaming else DatasetDict()
+        # TODO: replace dataset dicts with single key to IterableDataset and to Dataset.
+        # don't know how to do it know - using dict simply because they work.
+        vectorized_train = IterableDatasetDict() if data_args.streaming_train else DatasetDict()
+        vectorized_eval = IterableDatasetDict() if data_args.streaming_eval else DatasetDict()
 
-        if data_args.streaming:
-            logger.info('creating IterableDatasetDict.')
-            vectorized_datasets['train'] = raw_datasets['train'].map(
+        num_proc = None
+        if data_args.streaming_train or data_args.streaming_eval:
+            logger.info(f'will preprocess data using {num_proc} processes.')
+
+        if data_args.streaming_train:
+            vectorized_train['train'] = raw_train['train'].map(
                 prepare_dataset, remove_columns=raw_datasets_features,
                 fn_kwargs=dict(labels_max_len=None),
             ).with_format("torch")
-            vectorized_datasets['eval'] = raw_datasets['eval'].map(
+        else:
+            vectorized_train['train'] = raw_train['train'].map(
+                prepare_dataset, remove_columns=raw_datasets_features,
+                num_proc=num_proc,
+                fn_kwargs=dict(labels_max_len=None),
+            ).with_format("torch")
+
+        if data_args.streaming_eval:
+            vectorized_eval['eval'] = raw_eval['eval'].map(
                 prepare_dataset, remove_columns=raw_datasets_features,
                 fn_kwargs=dict(labels_max_len=max_labels_length),
             ).with_format("torch")
         else:
-            num_proc = None
-            logger.info(f'creating DatasetDict. using {num_proc} processes to prepare data.')
-
-            vectorized_datasets['train'] = raw_datasets['train'].map(
-                prepare_dataset, remove_columns=raw_datasets_features,
-                num_proc=num_proc,
-                fn_kwargs=dict(labels_max_len=None),
-            ).with_format("torch")
-            vectorized_datasets['eval'] = raw_datasets['eval'].map(
+            vectorized_eval['eval'] = raw_eval['eval'].map(
                 prepare_dataset, remove_columns=raw_datasets_features,
                 num_proc=num_proc,
                 fn_kwargs=dict(labels_max_len=max_labels_length),
             ).with_format("torch")
 
-        if training_args.do_train and data_args.streaming:
+        if training_args.do_train and data_args.streaming_train:
             # manually shuffle if streaming (done by the trainer for non-streaming)
-            vectorized_datasets["train"] = vectorized_datasets["train"].shuffle(
+            vectorized_train['train'] = vectorized_train['train'].shuffle(
                 buffer_size=data_args.shuffle_buffer_size,
                 seed=training_args.seed,
             )
@@ -621,11 +641,11 @@ def main():
     if training_args.do_train:
         # Filter items from train set only. 
         # Should keep them in eval set not to affect eval metrics.
-        vectorized_datasets["train"] = vectorized_datasets["train"].filter(
+        vectorized_train['train'] = vectorized_train['train'].filter(
             is_audio_in_length_range,
             input_columns=["input_length"],
         )
-        vectorized_datasets["train"] = vectorized_datasets["train"].filter(
+        vectorized_train['train'] = vectorized_train['train'].filter(
             are_labels_in_length_range,
             input_columns=["labels_length"],
         )
@@ -685,12 +705,12 @@ def main():
     trainer = Seq2SeqTrainer(
         model=model,
         args=training_args,
-        train_dataset=vectorized_datasets["train"] if training_args.do_train else None,
-        eval_dataset=vectorized_datasets["eval"] if training_args.do_eval else None,
+        train_dataset=vectorized_train['train'] if training_args.do_train else None,
+        eval_dataset=vectorized_eval['eval'] if training_args.do_eval else None,
         tokenizer=processor,
         data_collator=data_collator,
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
-        callbacks=[ShuffleCallback()] if data_args.streaming else None,
+        callbacks=[ShuffleCallback()] if data_args.streaming_train else None,
     )
 
     # 12. Training
