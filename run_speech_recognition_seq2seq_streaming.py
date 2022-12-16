@@ -588,7 +588,7 @@ def main():
                 fn_kwargs=dict(labels_max_len=max_labels_length),
             ).with_format("torch")
         else:
-            num_proc = 4
+            num_proc = None
             logger.info(f'creating DatasetDict. using {num_proc} processes to prepare data.')
 
             vectorized_datasets['train'] = raw_datasets['train'].map(
