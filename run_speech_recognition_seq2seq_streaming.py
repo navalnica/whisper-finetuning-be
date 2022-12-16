@@ -360,12 +360,14 @@ def main():
         f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
         f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
+    
     logger.info(f"Training/evaluation parameters {training_args}")
+    logger.info(f"Data parameters: {data_args}")
+    logger.info(f"Model parameters: {model_args}")
 
     # Set the verbosity to info of the Transformers logger (on main process only):
     if is_main_process(training_args.local_rank):
         transformers.utils.logging.set_verbosity_info()
-    logger.info("Training/evaluation parameters %s", training_args)
 
     # 3. Detecting last checkpoint and eventually continue from last checkpoint
     last_checkpoint = None
