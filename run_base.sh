@@ -37,7 +37,8 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--ignore_data_skip \
 	--predict_with_generate \
 	--do_normalize_eval \
-	--streaming="False" \
+	--streaming_train="True" \
+	--streaming_eval="False" \
 	--use_auth_token \
 	--push_to_hub \
 	--hub_model_id="ales/whisper-base-belarusian"
