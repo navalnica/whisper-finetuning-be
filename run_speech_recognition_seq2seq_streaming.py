@@ -573,9 +573,12 @@ def main():
         return sample
 
     with training_args.main_process_first(desc="dataset map pre-processing"):
+        logger.info(f'vectorizing dataset')
+
         vectorized_datasets = IterableDatasetDict() if data_args.streaming else DatasetDict()
 
         if data_args.streaming:
+            logger.info('creating IterableDatasetDict.')
             vectorized_datasets['train'] = raw_datasets['train'].map(
                 prepare_dataset, remove_columns=raw_datasets_features,
                 fn_kwargs=dict(labels_max_len=None),
@@ -585,15 +588,18 @@ def main():
                 fn_kwargs=dict(labels_max_len=max_labels_length),
             ).with_format("torch")
         else:
+            num_proc = 2
+            logger.info(f'creating DatasetDict. using {num_proc} processes to prepare data.')
+
             vectorized_datasets['train'] = raw_datasets['train'].map(
                 prepare_dataset, remove_columns=raw_datasets_features,
+                num_proc=num_proc,
                 fn_kwargs=dict(labels_max_len=None),
-                num_proc=4
             ).with_format("torch")
             vectorized_datasets['eval'] = raw_datasets['eval'].map(
                 prepare_dataset, remove_columns=raw_datasets_features,
+                num_proc=num_proc,
                 fn_kwargs=dict(labels_max_len=max_labels_length),
-                num_proc=4
             ).with_format("torch")
 
         if training_args.do_train and data_args.streaming:
