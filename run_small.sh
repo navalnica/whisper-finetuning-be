@@ -7,14 +7,14 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--eval_split_name="validation" \
 	--model_index_name="Whisper Small Belarusian" \
     \
-	--max_steps="18000" \
+	--max_steps="6000" \
 	--output_dir="./" \
 	--per_device_train_batch_size="64" \
 	--per_device_eval_batch_size="32" \
 	--logging_steps="50" \
 	--logging_first_step \
-	--learning_rate="1e-4" \
-	--warmup_steps="500" \
+	--learning_rate="3.5e-5" \
+	--warmup_steps="0" \
 	--evaluation_strategy="steps" \
 	--eval_steps="1000" \
 	--save_strategy="steps" \
@@ -39,7 +39,8 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--predict_with_generate \
 	--do_normalize_eval \
 	--streaming_train="True" \
-	--streaming_eval="False" \
+	--streaming_eval="True" \
+	--seed="43" \
 	--use_auth_token \
 	--push_to_hub \
 	--hub_model_id="ales/whisper-small-belarusian"
