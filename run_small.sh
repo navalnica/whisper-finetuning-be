@@ -1,5 +1,5 @@
 python src/run_speech_recognition_seq2seq_streaming.py \
-	--model_name_or_path="openai/whisper-small" \
+	--model_name_or_path="ales/whisper-small-belarusian" \
 	--dataset_name="mozilla-foundation/common_voice_11_0" \
 	--dataset_config_name="be" \
 	--language="be" \
@@ -34,13 +34,10 @@ python src/run_speech_recognition_seq2seq_streaming.py \
     \
 	--do_train \
 	--do_eval \
-	--resume_from_checkpoint="checkpoint-12000" \
 	--ignore_data_skip \
 	--predict_with_generate \
 	--do_normalize_eval \
 	--streaming_train="True" \
-	--streaming_eval="True" \
+	--streaming_eval="False" \
 	--seed="43" \
-	--use_auth_token \
-	--push_to_hub \
-	--hub_model_id="ales/whisper-small-belarusian"
+	--use_auth_token
