@@ -39,6 +39,9 @@ The code in this repository is a modified version of code from
 
 ## Resuming training from exising checkpoint
 When resuming training from existing checkpoint:
+* when using streaming, epoch will get reset to 0. that means order of items passed to a model would be the same,
+  if the seed does not change. actual train_dataloader seed would be: 
+  `train_dataloader.dataset.set_epoch(train_dataloader.dataset._epoch + 1)`
 * it's better to save all `checkpoint-\d+` dirs. better not to rely on data saved to `output_dir` because:
   * not all data is saved to `output_dir`. e.g. following files are not saved to `output_dir`: 
     `optimizer.pt`, `rng_state.pth`, `scaler.pt`, `scheduler.pt`. so can't resume training in a correct way from
@@ -70,9 +73,16 @@ When resuming training from existing checkpoint:
   but does StreamingDataset have any epochs?
 * does streaming mode support parallel data load and processing?<br>
   when using non-streaming mode we can use `dataset.map(..., num_proc=<num_proc>)`
+* I got CUDA out of memory error when tried to launch a second training run for Whisper Small model.
+  training params are almost the same: `--per_device_train_batch_size="64"`
+  the only thing changed is that now evaluation dataset now doesn't use streaming.
 
 
 ## Notes:
+* Common Voice 11 dataset 
+  [uploaded to HuggingFace](https://huggingface.co/datasets/mozilla-foundation/common_voice_11_0)
+  has only single voicing of each sentence in each split (train, validation, test).<br>
+  Much more audiofiles should be available on Common Voice so that each sentence is voiced multiple times by different people
 * using CommonVoice 11 dataset in a streaming way.<br>
   use `streaming=True` for train & validation & test.<br>
   as an alternative, we can use `streaming=False` for validation & test sets to save time on data processing.
