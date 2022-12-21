@@ -1,4 +1,7 @@
 import argparse
+import logging
+import sys
+import datetime
 
 from transformers import pipeline
 from transformers.models.whisper.english_normalizer import BasicTextNormalizer
@@ -6,6 +9,21 @@ from datasets import load_dataset, Audio
 import evaluate
 
 from belarusian_text_normalizer import BelarusianTextNormalizer
+
+
+now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%m/%d/%Y %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(filename=f'eval_{now_str}.log', mode='w')
+    ],
+)
+logger.setLevel(logging.INFO)
 
 
 wer_metric = evaluate.load("wer")
@@ -50,10 +68,11 @@ def data(dataset):
 
 
 def main(args):
+    logger.info(f'running evaluation script with following parameters: {args}')
+    logger.info(f'using following text normalier: {whisper_norm}')
+
     batch_size = args.batch_size
-    whisper_asr = pipeline(
-        "automatic-speech-recognition", model=args.model_id, device=args.device
-    )
+    whisper_asr = pipeline("automatic-speech-recognition", model=args.model_id, device=args.device)
 
     whisper_asr.model.config.forced_decoder_ids = (
         whisper_asr.tokenizer.get_decoder_prompt_ids(
@@ -61,6 +80,7 @@ def main(args):
         )
     )
 
+    logger.info('loading dataset')
     dataset = load_dataset(
         args.dataset,
         args.config,
@@ -79,24 +99,30 @@ def main(args):
     predictions = []
     references = []
 
-    # run streamed inference
+    logger.info('running inference')
     for out in whisper_asr(data(dataset), batch_size=batch_size):
         predictions.append(whisper_norm(out["text"]))
         references.append(out["reference"][0])
 
+    logger.info('computing metrics')
     wer = wer_metric.compute(references=references, predictions=predictions)
-    wer = round(100 * wer, 2)
+    wer = wer * 100
 
-    print("WER:", wer)
+    logger.info('metrics computed')
+    logger.info(f'WER: {wer}')
+
     evaluate.push_to_hub(
         model_id=args.model_id,
+
         metric_value=wer,
         metric_type="wer",
         metric_name="WER",
+
         dataset_name=args.dataset,
         dataset_type=args.dataset,
-        dataset_split=args.split,
         dataset_config=args.config,
+        dataset_split=args.split,
+        
         task_type="automatic-speech-recognition",
         task_name="Automatic Speech Recognition"
     )
