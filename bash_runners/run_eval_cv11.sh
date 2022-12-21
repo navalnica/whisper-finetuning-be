@@ -1,4 +1,4 @@
-python src/run_eval_whisper_streaming \
+python src/run_eval_whisper_streaming.py \
 	--model_id="." \
 	--language="be" \
 	--dataset="mozilla-foundation/common_voice_11_0" \
