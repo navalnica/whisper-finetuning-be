@@ -1,4 +1,5 @@
 import logging
+import sys
 
 import torch
 
@@ -7,6 +8,7 @@ from transformers import Seq2SeqTrainer
 
 
 logger = logging.getLogger('custom_trainer')
+logger.setLevel(logging.INFO)
 
 
 class Seq2SeqTrainerCustomLinearScheduler(Seq2SeqTrainer):

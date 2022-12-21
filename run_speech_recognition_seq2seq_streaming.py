@@ -302,7 +302,29 @@ def load_maybe_streaming_dataset(dataset_name, dataset_config_name, split="train
 
 
 def main():
-    # 1. Parse input arguments
+    # 1. Setup logging
+    now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+        datefmt="%m/%d/%Y %H:%M:%S",
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
+    log_level = training_args.get_process_log_level()
+    logger.setLevel(log_level)
+    datasets.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.set_verbosity(log_level)
+    transformers.utils.logging.enable_default_handler()
+    transformers.utils.logging.enable_explicit_format()
+
+    logger.setLevel(logging.INFO if is_main_process(training_args.local_rank) else logging.WARN)
+
+    # Log on each process the small summary:
+    logger.warning(
+        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
+        f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
+    )
+
+    # 2. Parse input arguments
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
@@ -320,41 +342,16 @@ def main():
     else:
         model_args, data_args, training_args, custom_training_args = parser.parse_args_into_dataclasses()
 
+    logger.info(f"Training/evaluation parameters {training_args}")
+    logger.info(f"Data parameters: {data_args}")
+    logger.info(f"Model parameters: {model_args}")
+
     if custom_training_args.learning_rate_end is not None:
         logger.info(f'found learning_rate_end={custom_training_args.learning_rate_end} in passed arguments. '
                     'will pass it to training_args')
         training_args.learning_rate_end = custom_training_args.learning_rate_end
     else:
         logger.info(f'learning_rate_end is None. will not pass it to training_args')
-
-    # 2. Setup logging
-    now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    logging.basicConfig(
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler(filename=f'train_{now_str}.log', mode='w')
-        ],
-    )
-    log_level = training_args.get_process_log_level()
-    logger.setLevel(log_level)
-    datasets.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.set_verbosity(log_level)
-    transformers.utils.logging.enable_default_handler()
-    transformers.utils.logging.enable_explicit_format()
-
-    logger.setLevel(logging.INFO if is_main_process(training_args.local_rank) else logging.WARN)
-
-    # Log on each process the small summary:
-    logger.warning(
-        f"Process rank: {training_args.local_rank}, device: {training_args.device}, n_gpu: {training_args.n_gpu}"
-        f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
-    )
-    
-    logger.info(f"Training/evaluation parameters {training_args}")
-    logger.info(f"Data parameters: {data_args}")
-    logger.info(f"Model parameters: {model_args}")
 
     # Set the verbosity to info of the Transformers logger (on main process only):
     if is_main_process(training_args.local_rank):
