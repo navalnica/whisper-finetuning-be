@@ -23,14 +23,6 @@ The code in this repository is a modified version of code from
   --logging_steps="50"
   --eval_steps="1000"
   ```
-* on the next run:
-  * download the whole dataset before the launch. 
-    this will probably save some time for data processing,
-    and allow to load and prepare data in a parallel fashion
-  * can also decrease eval batch size. currently it's probably causing GPU to wait for CPU to prepare a next batch
-* perform evaluation of fine-tuned model on CommonVoice test set
-* add [Whisper fine-tuning Event repo](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event)
-  to remotes and merge updates from this original event repo
 * Learning rate:
   * max learning rate is not the same as LR passed as a parameter to training script. it is actually lower.
   * when resuming training, LR scheduling behaves incorrectly
@@ -69,6 +61,7 @@ When resuming training from existing checkpoint:
 ## Questions:
 * What checkpoint (best, I guess) is saved in the `output_dir`? 
   How is it overwritten when resuming training from existing checkpoint?
+* why dataset loading crashes when using `num_proc > 0`?
 * does `ShuffleCallback` work with StreamingDataset? it reshuffles data `on_epoch_begin()`,
   but does StreamingDataset have any epochs?
 * does streaming mode support parallel data load and processing?<br>
@@ -98,6 +91,9 @@ When resuming training from existing checkpoint:
 * Log tracking in Jupyter (not working) and in bash (works as expected with `tee`)
 * Loggers in `run_speech.....py` do not control `transformers` and `datasets` loggers. 
   can't redirect their outputs using handlers. it's better and easier to redirect output in a bash
+* to evaluate on `google/fleurs` dataset had to downgrade `numba` from `0.56.4` to `0.56.3`, then install `librosa`
+  (strange, because `librosa` should have been installed when `pip install -r ~/whisper-finetuning-be/requirements.txt`
+  was run) and then upgrade back to `numba==0.56.4` because couldn't `import numba` when it was `0.56.3`
 * Need to set `use_cache` to False since we're using gradient checkpointing, and the two are incompatible
 * Default Linear scheduler is used 
 * Default Adam optimizer is used
