@@ -27,6 +27,7 @@ logger.setLevel(logging.INFO)
 
 
 wer_metric = evaluate.load("wer")
+whisper_norm = BelarusianTextNormalizer()
 
 
 def is_target_text_in_range(ref):
@@ -36,30 +37,9 @@ def is_target_text_in_range(ref):
         return ref.strip() != ""
 
 
-def get_text(sample):
-    if "text" in sample:
-        return sample["text"]
-    elif "sentence" in sample:
-        return sample["sentence"]
-    elif "normalized_text" in sample:
-        return sample["normalized_text"]
-    elif "transcript" in sample:
-        return sample["transcript"]
-    elif "transcription" in sample:
-        return sample["transcription"]
-    else:
-        raise ValueError(
-            f"Expected transcript column of either 'text', 'sentence', 'normalized_text' or 'transcript'. Got sample of "
-            ".join{sample.keys()}. Ensure a text column name is present in the dataset."
-        )
-
-
-whisper_norm = BelarusianTextNormalizer()
-
-
-def normalise(batch):
-    batch["norm_text"] = whisper_norm(get_text(batch))
-    return batch
+def normalise(sample, text_column: str):
+    sample["norm_text"] = whisper_norm(sample[text_column])
+    return sample
 
 
 def data(dataset):
@@ -93,7 +73,7 @@ def main(args):
     dataset = dataset.take(args.max_eval_samples)
 
     dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
-    dataset = dataset.map(normalise)
+    dataset = dataset.map(normalise, fn_kwargs=dict(text_column=args.text_column))
     dataset = dataset.filter(is_target_text_in_range, input_columns=["norm_text"])
 
     predictions = []
@@ -155,7 +135,12 @@ if __name__ == "__main__":
         default="test",
         help="Split of the dataset. *E.g.* `'test'`",
     )
-
+    parser.add_argument(
+        "--text_column",
+        type=str,
+        required=True,
+        help="Dataset column name containing target transcription of an audiofile"
+    )
     parser.add_argument(
         "--device",
         type=int,
