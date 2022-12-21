@@ -30,7 +30,7 @@ class Seq2SeqTrainerCustomLinearScheduler(Seq2SeqTrainer):
             learning_rate_end = self.args.learning_rate_end
             use_custom_scheduler = True
             logger.info('TrainerCustomLinearScheduler.create_scheduler(). '
-                        'initializing custom linear scheduler using learning_rate_end argument')
+                        f'initializing custom linear scheduler using learning_rate_end={learning_rate_end}')
         except:
             logger.info('TrainerCustomLinearScheduler.create_scheduler(). '
                         'learning_rate_end was not set. fallback to a default behavior')

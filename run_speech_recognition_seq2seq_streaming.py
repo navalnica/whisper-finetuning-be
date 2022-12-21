@@ -343,17 +343,18 @@ def main():
         f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
 
-    # log arguments
-    logger.info(f"Training/evaluation parameters {training_args}")
-    logger.info(f"Data parameters: {data_args}")
-    logger.info(f"Model parameters: {model_args}")
-
+    # update training_args if needed
     if custom_training_args.learning_rate_end is not None:
         logger.info(f'found learning_rate_end={custom_training_args.learning_rate_end} in passed arguments. '
                     'will pass it to training_args')
         training_args.learning_rate_end = custom_training_args.learning_rate_end
     else:
         logger.info(f'learning_rate_end is None. will not pass it to training_args')
+
+    # log arguments
+    logger.info(f"Training/evaluation parameters {training_args}")
+    logger.info(f"Data parameters: {data_args}")
+    logger.info(f"Model parameters: {model_args}")
 
     # Set the verbosity to info of the Transformers logger (on main process only):
     if is_main_process(training_args.local_rank):
