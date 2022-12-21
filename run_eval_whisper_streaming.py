@@ -5,6 +5,9 @@ from transformers.models.whisper.english_normalizer import BasicTextNormalizer
 from datasets import load_dataset, Audio
 import evaluate
 
+from belarusian_text_normalizer import BelarusianTextNormalizer
+
+
 wer_metric = evaluate.load("wer")
 
 
@@ -33,7 +36,7 @@ def get_text(sample):
         )
 
 
-whisper_norm = BasicTextNormalizer()
+whisper_norm = BelarusianTextNormalizer()
 
 
 def normalise(batch):
