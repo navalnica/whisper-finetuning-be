@@ -51,6 +51,7 @@ from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+from custom_trainer import Seq2SeqTrainerCustomLinearScheduler
 from belarusian_text_normalizer import BelarusianTextNormalizer
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
@@ -665,7 +666,7 @@ def main():
                 train_dataloader.dataset.set_epoch(train_dataloader.dataset._epoch + 1)
 
     # Initialize Trainer
-    trainer = Seq2SeqTrainer(
+    trainer = Seq2SeqTrainerCustomLinearScheduler(
         model=model,
         args=training_args,
         train_dataset=vectorized_train['train'] if training_args.do_train else None,
