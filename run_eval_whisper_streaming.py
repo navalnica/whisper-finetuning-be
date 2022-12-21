@@ -30,7 +30,7 @@ logger.setLevel(logging.INFO)
 
 
 wer_metric = evaluate.load("wer")
-whisper_norm = BelarusianTextNormalizer()
+text_normalizer = BelarusianTextNormalizer()
 
 
 def is_target_text_in_range(ref):
@@ -41,13 +41,13 @@ def is_target_text_in_range(ref):
 
 
 def normalise(sample, text_column: str):
-    sample["norm_text"] = whisper_norm(sample[text_column])
+    sample["reference_norm"] = text_normalizer(sample[text_column])
     return sample
 
 
 def data(dataset,text_column: str):
     for i, item in enumerate(dataset):
-        yield {**item["audio"], "reference": item["norm_text"], 'reference_raw': item[text_column]}
+        yield {**item["audio"], "reference_norm": item["reference_norm"], 'reference': item[text_column]}
 
 
 def clean_filename(filename: str):
@@ -56,7 +56,7 @@ def clean_filename(filename: str):
 
 def main(args):
     logger.info(f'running evaluation script with following parameters: {args}')
-    logger.info(f'using following text normalier: {whisper_norm}')
+    logger.info(f'using following text normalier: {text_normalizer}')
 
     batch_size = args.batch_size
     whisper_asr = pipeline("automatic-speech-recognition", model=args.model_id, device=args.device)
@@ -82,22 +82,24 @@ def main(args):
     # TODO: probably no need in cast, because pipelien migh handle resampling internally. need to check
     dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
     dataset = dataset.map(normalise, fn_kwargs=dict(text_column=args.text_column))
-    dataset = dataset.filter(is_target_text_in_range, input_columns=["norm_text"])
+    dataset = dataset.filter(is_target_text_in_range, input_columns=["reference_norm"])
 
     predictions = []
+    predictions_norm = []
     references = []
-    references_raw = []
+    references_norm = []
     audio_paths = []
 
     logger.info('running inference')
     for out in whisper_asr(data(dataset, text_column=args.text_column), batch_size=batch_size):
-        predictions.append(whisper_norm(out["text"]))
+        predictions.append(out["text"])
+        predictions_norm.append(text_normalizer(out["text"]))
         references.append(out["reference"][0])
-        references_raw.append(out["reference_raw"][0])
+        references_norm.append(out["reference_norm"][0])
         audio_paths.append(out['path'][0])
 
     logger.info('computing metrics')
-    wer = wer_metric.compute(references=references, predictions=predictions)
+    wer = wer_metric.compute(references=references_norm, predictions=predictions_norm)
     wer = wer * 100
 
     logger.info('metrics computed')
@@ -108,8 +110,9 @@ def main(args):
         preds_fp = clean_filename(preds_fp)
         logger.info(f'saving predictions to: "{preds_fp}"')
         preds_df = pd.DataFrame({
-            'audio_path': audio_paths, 'prediction': predictions, 
-            'reference': references, 'reference_raw': references_raw
+            'audio_path': audio_paths, 
+            'prediction_norm': predictions_norm, 'reference_norm': references_norm,
+            'prediction': predictions, 'reference': references, 
         })
         preds_df.to_csv(preds_fp, sep='\t', index=False)
     else:
