@@ -24,9 +24,6 @@ import logging
 import os
 import sys
 import datetime
-import re
-import regex
-import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Union, Iterable
 
@@ -54,6 +51,7 @@ from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
+from belarusian_text_normalizer import BelarusianTextNormalizer
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.25.0.dev0")
@@ -229,41 +227,6 @@ class DataTrainingArguments:
         metadata={"help": "Whether to use streaming mode to load and pre-process the evaluation split."},
     )
 
-
-class BelarusianTextNormalizer:
-    """
-    Based on transformers.models.whisper.english_normalizer.BasicTextNormalizer
-    but with support not to remove certain characters.
-    e.g. apostrophe (') - a symbol from Belarusian alphabet - was removed using BasicTextNormalizer.
-    """
-
-    def __init__(self, split_letters: bool = False):
-        self.split_letters = split_letters
-        self.allowed_symbols = ("'",)
-
-    @staticmethod
-    def clean(s: str, allowed_symbols: Iterable[str] = None):
-        """
-        Replace any other markers, symbols, punctuations with a space, keeping diacritics
-        """
-        if allowed_symbols is None:
-            allowed_symbols = []
-        res = "".join(" " if unicodedata.category(c)[0] in "MSP" and c not in allowed_symbols else c 
-                      for c in unicodedata.normalize("NFKC", s))
-        return res
-
-    def __call__(self, s: str):
-        s = s.lower()
-        s = re.sub(r"[<\[][^>\]]*[>\]]", "", s)  # remove words between brackets
-        s = re.sub(r"\(([^)]+?)\)", "", s)  # remove words between parenthesis
-        s = self.clean(s, allowed_symbols=self.allowed_symbols).lower()
-
-        if self.split_letters:
-            s = " ".join(regex.findall(r"\X", s, regex.U))
-
-        s = re.sub(r"\s+", " ", s)  # replace any successive whitespace characters with a space
-
-        return s
 
 
 @dataclass
