@@ -1,3 +1,5 @@
+mkdir -p logs
+
 python src/run_speech_recognition_seq2seq_streaming.py \
 	--model_name_or_path="ales/whisper-small-belarusian" \
 	--dataset_name="mozilla-foundation/common_voice_11_0" \
@@ -13,7 +15,8 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--per_device_eval_batch_size="32" \
 	--logging_steps="50" \
 	--logging_first_step \
-	--learning_rate="3.5e-5" \
+	--learning_rate="3e-5" \
+	--learning_rate_end="1e-5" \
 	--warmup_steps="0" \
 	--evaluation_strategy="steps" \
 	--eval_steps="1000" \
@@ -40,4 +43,5 @@ python src/run_speech_recognition_seq2seq_streaming.py \
 	--streaming_train="True" \
 	--streaming_eval="False" \
 	--seed="43" \
-	--use_auth_token
+	--use_auth_token \
+	--push_to_hub="False" 2>&1 | tee "logs/train_$(date +"%Y%m%d-%H%M%S").log"
