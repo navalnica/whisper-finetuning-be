@@ -56,7 +56,7 @@ def clean_filename(filename: str):
 
 def main(args):
     logger.info(f'running evaluation script with following parameters: {args}')
-    logger.info(f'using following text normalier: {text_normalizer}')
+    logger.info(f'using following text normalizer: {text_normalizer}')
 
     batch_size = args.batch_size
     whisper_asr = pipeline("automatic-speech-recognition", model=args.model_id, device=args.device)

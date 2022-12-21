@@ -4,7 +4,7 @@ python src/run_eval_whisper_streaming.py \
 	--dataset="google/fleurs" \
     --config="be_by" \
     --split="test" \
-    --text_column="transcription" \
+    --text_column="raw_transcription" \
     --device="0" \
     --batch_size="32" \
     --streaming="True" \
