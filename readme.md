@@ -23,9 +23,6 @@ The code in this repository is a modified version of code from
   --logging_steps="50"
   --eval_steps="1000"
   ```
-* Learning rate:
-  * max learning rate is not the same as LR passed as a parameter to training script. it is actually lower.
-  * when resuming training, LR scheduling behaves incorrectly
 * check exact sizes of train, eval, test sets of CommonVoice 11
 * fill TODOs in Notes section with answers and discussions from a Discord
 
@@ -123,6 +120,14 @@ When resuming training from existing checkpoint:
   > normalizer_be("раз'яднаць")
   "раз'яднаць"
   ```
+
+### Scheduling Learning Rate when resuming training
+* When resuming training, total number of optimization steps changes
+* Usinng default LR-scheduler (linear with warmup), will result in unexpected LR changes
+* To explicitly control the maximum LR (after warmup is finished) and the LR in the end of training
+  I've subclassed `transformers.Trainer` class and overriden `create_scheduler()` function in 
+  `custom_trainer.Seq2SeqTrainerCustomLinearScheduler`
+* EDA on controlling LR scheduling could be found in `eda/trainer_lr_scheduler.ipynb` notebook
 
 ### Different batch sizes for train and evaluation:
 * Theoretically you can use a larger batch size for evaluation vs training! 
