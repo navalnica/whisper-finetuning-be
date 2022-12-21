@@ -45,9 +45,9 @@ def normalise(sample, text_column: str):
     return sample
 
 
-def data(dataset):
+def data(dataset,text_column: str):
     for i, item in enumerate(dataset):
-        yield {**item["audio"], "reference": item["norm_text"]}
+        yield {**item["audio"], "reference": item["norm_text"], 'reference_raw': item[text_column]}
 
 
 def clean_filename(filename: str):
@@ -86,12 +86,14 @@ def main(args):
 
     predictions = []
     references = []
+    references_raw = []
     audio_paths = []
 
     logger.info('running inference')
-    for out in whisper_asr(data(dataset), batch_size=batch_size):
+    for out in whisper_asr(data(dataset, text_column=args.text_column), batch_size=batch_size):
         predictions.append(whisper_norm(out["text"]))
         references.append(out["reference"][0])
+        references_raw.append(out["reference_raw"][0])
         audio_paths.append(out['path'][0])
 
     logger.info('computing metrics')
@@ -105,7 +107,10 @@ def main(args):
         preds_fp = f'preds_{args.dataset}_{args.config}_{args.split}_{now_str}.tsv'
         preds_fp = clean_filename(preds_fp)
         logger.info(f'saving predictions to: "{preds_fp}"')
-        preds_df = pd.DataFrame({'audio_path': audio_paths, 'prediction': predictions, 'reference': references})
+        preds_df = pd.DataFrame({
+            'audio_path': audio_paths, 'prediction': predictions, 
+            'reference': references, 'reference_raw': references_raw
+        })
         preds_df.to_csv(preds_fp, sep='\t', index=False)
     else:
         logger.info('save_predictions is False. will not save predictions to a file')
