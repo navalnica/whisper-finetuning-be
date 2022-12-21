@@ -6,7 +6,7 @@ python src/run_eval_whisper_streaming.py \
     --split="test" \
     --text_column="raw_transcription" \
     --device="0" \
-    --batch_size="32" \
+    --batch_size="16" \
     --streaming="True" \
     --push_to_hub="True" \
     --save_predictions="True"
