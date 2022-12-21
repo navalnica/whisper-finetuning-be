@@ -63,6 +63,18 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class CustomTrainingArguments:
+    """ Custom trianing arguments """
+    
+    learning_rate_end: Optional[float] = field(
+        default=None,
+        metadata={
+            "help": ('Learning rate in the end of a training run. Passed to a Seq2SeqTrainerCustomLinearScheduler.')
+        },
+    )
+
+
+@dataclass
 class ModelArguments:
     """
     Arguments pertaining to which model/config/tokenizer we are going to fine-tune from.
@@ -294,15 +306,26 @@ def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, Seq2SeqTrainingArguments))
+    parser = HfArgumentParser((
+        ModelArguments, DataTrainingArguments, 
+        Seq2SeqTrainingArguments, CustomTrainingArguments
+    ))
 
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args = parser.parse_json_file(json_file=os.path.abspath(sys.argv[1]))
+        model_args, data_args, training_args, custom_training_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1])
+        )
     else:
-        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args, custom_training_args = parser.parse_args_into_dataclasses()
 
+    if custom_training_args.learning_rate_end is not None:
+        logger.info(f'found learning_rate_end={custom_training_args.learning_rate_end} in passed arguments. '
+                    'will pass it to training_args')
+        training_args.learning_rate_end = custom_training_args.learning_rate_end
+    else:
+        logger.info(f'learning_rate_end is None. will not pass it to training_args')
 
     # 2. Setup logging
     now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
