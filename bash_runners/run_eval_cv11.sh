@@ -1,5 +1,5 @@
 python src/run_eval_whisper_streaming \
-	--model_id="ales/whisper-small-belarusian" \
+	--model_id="." \
 	--language="be" \
 	--dataset="mozilla-foundation/common_voice_11_0" \
     --config="be" \
