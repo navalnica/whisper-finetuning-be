@@ -7,4 +7,6 @@ python src/run_eval_whisper_streaming.py \
     --text_column="sentence" \
     --device="0" \
     --batch_size="32" \
-    --streaming="True"
+    --streaming="True" \
+    --push_to_hub="True" \
+    --save_predictions="True"

@@ -2,6 +2,9 @@ import argparse
 import logging
 import sys
 import datetime
+import os
+
+import pandas as pd
 
 from transformers import pipeline
 from transformers.models.whisper.english_normalizer import BasicTextNormalizer
@@ -47,6 +50,10 @@ def data(dataset):
         yield {**item["audio"], "reference": item["norm_text"]}
 
 
+def clean_filename(filename: str):
+    return filename.replace(os.path.sep, '_')
+
+
 def main(args):
     logger.info(f'running evaluation script with following parameters: {args}')
     logger.info(f'using following text normalier: {whisper_norm}')
@@ -72,17 +79,20 @@ def main(args):
     # Only uncomment for debugging
     dataset = dataset.take(args.max_eval_samples)
 
+    # TODO: probably no need in cast, because pipelien migh handle resampling internally. need to check
     dataset = dataset.cast_column("audio", Audio(sampling_rate=16000))
     dataset = dataset.map(normalise, fn_kwargs=dict(text_column=args.text_column))
     dataset = dataset.filter(is_target_text_in_range, input_columns=["norm_text"])
 
     predictions = []
     references = []
+    audio_paths = []
 
     logger.info('running inference')
     for out in whisper_asr(data(dataset), batch_size=batch_size):
         predictions.append(whisper_norm(out["text"]))
         references.append(out["reference"][0])
+        audio_paths.append(out['path'][0])
 
     logger.info('computing metrics')
     wer = wer_metric.compute(references=references, predictions=predictions)
@@ -91,21 +101,34 @@ def main(args):
     logger.info('metrics computed')
     logger.info(f'WER: {wer}')
 
-    evaluate.push_to_hub(
-        model_id=args.model_id,
+    if args.save_predictions is True:
+        preds_fp = f'preds_{args.dataset}_{args.config}_{args.split}_{now_str}.tsv'
+        preds_fp = clean_filename(preds_fp)
+        logger.info(f'saving predictions to: "{preds_fp}"')
+        preds_df = pd.DataFrame({'audio_path': audio_paths, 'prediction': predictions, 'reference': references})
+        preds_df.to_csv(preds_fp, sep='\t', index=False)
+    else:
+        logger.info('save_predictions is False. will not save predictions to a file')
 
-        metric_value=wer,
-        metric_type="wer",
-        metric_name="WER",
+    if args.push_to_hub is True:
+        logger.info(f'updating model card and pushing to HuggingFace Hub')
+        evaluate.push_to_hub(
+            model_id=args.model_id,
 
-        dataset_name=args.dataset,
-        dataset_type=args.dataset,
-        dataset_config=args.config,
-        dataset_split=args.split,
-        
-        task_type="automatic-speech-recognition",
-        task_name="Automatic Speech Recognition"
-    )
+            metric_value=wer,
+            metric_type="wer",
+            metric_name="WER",
+
+            dataset_name=args.dataset,
+            dataset_type=args.dataset,
+            dataset_config=args.config,
+            dataset_split=args.split,
+            
+            task_type="automatic-speech-recognition",
+            task_name="Automatic Speech Recognition"
+        )
+    else:
+        logger.info('push_to_hub is False. will not update model card and push to HuggingFace Hub')
 
 
 if __name__ == "__main__":
@@ -170,6 +193,18 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Two letter language code for the transcription language, e.g. use 'en' for English.",
+    )
+    parser.add_argument(
+        '--push_to_hub',
+        type=bool,
+        default=True,
+        help="Whether to update model card and push changes to HuggingFace Hub"
+    )
+    parser.add_argument(
+        '--save_predictions',
+        type=bool,
+        default=True,
+        help="Whether to store predictions and target transcriptions to a file"
     )
     args = parser.parse_args()
 
