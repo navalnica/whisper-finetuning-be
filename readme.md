@@ -37,13 +37,6 @@ When resuming training from existing checkpoint:
     data saved to `output_dir`
   * when resuming training from `output_dir` as a checkpoint dir, model saved to `output_dir` can be worse than
     previously save (need to investifate further. but such happened already)
-* learning rate gets reset if passing same parameter value to training script as in previour run.<br>
-  need to provide learning rate from the last step of previous run to continue
-  training in a correct way
-  * however even if passing learning rate from the last step, in the new run it has different value than expected
-    * probably because last checkpont was chosen incorrectly
-    * or learning rate is treated as a starting learning rate at step 0 and not on step X (where we resume).<br>
-      need to try to pass same LR that was passes as a starting LR to the very first run
 * it's unclear whether decision on saving current model
   is made by comparing current metrics with metrics of the best checkpoint. I guess model with worse performance
   will not overwrite best model checkpoint already exising in the output dir, but need to double check.
@@ -54,6 +47,15 @@ When resuming training from existing checkpoint:
     * if the sampling is the same across reruns, `ignore_data_skip=True` will lead to same items been passed to a model
       in current run. it's OK if previous run ended with large step value on the last epoch.
       if not, the same elements from the same epoch will be passed to a model again.
+
+### Scheduling Learning Rate when resuming training
+* When resuming training, total number of optimization steps changes
+* Usinng default LR-scheduler (linear with warmup), will result in unexpected LR changes
+* To explicitly control the maximum LR (after warmup is finished) and the LR in the end of training
+  I've subclassed `transformers.Trainer` class and overriden `create_scheduler()` function in 
+  `custom_trainer.Seq2SeqTrainerCustomLinearScheduler`
+* EDA on controlling LR scheduling could be found in `eda/trainer_lr_scheduler.ipynb` notebook
+
 
 ## Questions:
 * What checkpoint (best, I guess) is saved in the `output_dir`? 
@@ -120,14 +122,6 @@ When resuming training from existing checkpoint:
   > normalizer_be("раз'яднаць")
   "раз'яднаць"
   ```
-
-### Scheduling Learning Rate when resuming training
-* When resuming training, total number of optimization steps changes
-* Usinng default LR-scheduler (linear with warmup), will result in unexpected LR changes
-* To explicitly control the maximum LR (after warmup is finished) and the LR in the end of training
-  I've subclassed `transformers.Trainer` class and overriden `create_scheduler()` function in 
-  `custom_trainer.Seq2SeqTrainerCustomLinearScheduler`
-* EDA on controlling LR scheduling could be found in `eda/trainer_lr_scheduler.ipynb` notebook
 
 ### Different batch sizes for train and evaluation:
 * Theoretically you can use a larger batch size for evaluation vs training! 
