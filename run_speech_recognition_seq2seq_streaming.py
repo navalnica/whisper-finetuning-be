@@ -302,7 +302,26 @@ def load_maybe_streaming_dataset(dataset_name, dataset_config_name, split="train
 
 
 def main():
-    # 1. Setup logging
+    # 1. Parse input arguments
+    # See all possible arguments in src/transformers/training_args.py
+    # or by passing the --help flag to this script.
+    # We now keep distinct sets of args, for a cleaner separation of concerns.
+    parser = HfArgumentParser((
+        ModelArguments, DataTrainingArguments, 
+        Seq2SeqTrainingArguments, CustomTrainingArguments
+    ))
+
+    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
+        # If we pass only one argument to the script and it's the path to a json file,
+        # let's parse it to get our arguments.
+        model_args, data_args, training_args, custom_training_args = parser.parse_json_file(
+            json_file=os.path.abspath(sys.argv[1])
+        )
+    else:
+        model_args, data_args, training_args, custom_training_args = parser.parse_args_into_dataclasses()
+
+
+    # 2. Setup logging
     now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
@@ -324,24 +343,7 @@ def main():
         f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
 
-    # 2. Parse input arguments
-    # See all possible arguments in src/transformers/training_args.py
-    # or by passing the --help flag to this script.
-    # We now keep distinct sets of args, for a cleaner separation of concerns.
-    parser = HfArgumentParser((
-        ModelArguments, DataTrainingArguments, 
-        Seq2SeqTrainingArguments, CustomTrainingArguments
-    ))
-
-    if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
-        # If we pass only one argument to the script and it's the path to a json file,
-        # let's parse it to get our arguments.
-        model_args, data_args, training_args, custom_training_args = parser.parse_json_file(
-            json_file=os.path.abspath(sys.argv[1])
-        )
-    else:
-        model_args, data_args, training_args, custom_training_args = parser.parse_args_into_dataclasses()
-
+    # log arguments
     logger.info(f"Training/evaluation parameters {training_args}")
     logger.info(f"Data parameters: {data_args}")
     logger.info(f"Model parameters: {model_args}")
@@ -356,6 +358,7 @@ def main():
     # Set the verbosity to info of the Transformers logger (on main process only):
     if is_main_process(training_args.local_rank):
         transformers.utils.logging.set_verbosity_info()
+
 
     # 3. Detecting last checkpoint and eventually continue from last checkpoint
     last_checkpoint = None
@@ -412,6 +415,7 @@ def main():
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
+
     # 4. Load dataset
 
     # TODO: replace dataset dicts with single key to IterableDataset and to Dataset.
@@ -452,6 +456,7 @@ def main():
             "Make sure to set `--text_column_name` to the correct text column - one of "
             f"{', '.join(raw_datasets_features)}."
         )
+
 
     # 5. Load pretrained model, tokenizer, and feature extractor
     #
@@ -503,6 +508,7 @@ def main():
         # We only need to set the task id when the language is specified (i.e. in a multilingual setting)
         tokenizer.set_prefix_tokens(language=data_args.language, task=data_args.task)
 
+
     # 6. Explicitly resample speech dataset
     raw_train = raw_train.cast_column(
         data_args.audio_column_name, datasets.features.Audio(
@@ -516,6 +522,7 @@ def main():
             mono=True
         )
     )
+
 
     # 7. Preprocessing the datasets.
     # We need to read the audio files as arrays and tokenize the targets.
@@ -634,6 +641,7 @@ def main():
             input_columns=["labels_length"],
         )
 
+
     # 8. Load Metric
     metric = evaluate.load("wer")
     do_normalize_eval = data_args.do_normalize_eval
@@ -658,6 +666,7 @@ def main():
 
         return {"wer": wer}
 
+
     # 9. Create a single speech processor
     if is_main_process(training_args.local_rank):
         # save feature extractor, tokenizer and config
@@ -667,11 +676,13 @@ def main():
 
     processor = AutoProcessor.from_pretrained(training_args.output_dir)
 
+
     # 10. Define data collator
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
     )
+
 
     # 11. Configure Trainer
     # Trainer callback to reinitialise and reshuffle the streamable datasets at the beginning of each epoch
@@ -697,6 +708,7 @@ def main():
         callbacks=[ShuffleCallback()] if data_args.streaming_train else None,
     )
 
+
     # 12. Training
     if training_args.do_train:
         checkpoint = None
@@ -715,6 +727,7 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
+
     # 13. Evaluation
     results = {}
     if training_args.do_eval:
@@ -729,6 +742,7 @@ def main():
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
+
 
     # 14. Write Training Stats
     kwargs = {
