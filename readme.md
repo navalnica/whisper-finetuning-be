@@ -18,6 +18,7 @@ The code in this repository is a modified version of code from
   ```
 
 ## Fine-tuning todos:
+* upd all .sh scripts to use `tee` and create `logs` dir
 * logs are printed only right before the evalutaion:<br>
   ```
   --logging_steps="50"
@@ -25,9 +26,14 @@ The code in this repository is a modified version of code from
   ```
 * check exact sizes of train, eval, test sets of CommonVoice 11
 * fill TODOs in Notes section with answers and discussions from a Discord
+  * https://discord.com/channels/879548962464493619/1045270618729361439/1050429189947408475
 
 ## Resuming training from exising checkpoint
 When resuming training from existing checkpoint:
+* TODO: probably need to load `optimizer.pt` and `scaler.pt` from checkpoint before resuming training.
+  otherwise, I guess, we
+  * reinitialize optimizer and loose history of parameters momentum (exponential weighted average)
+  * scale loss incorrectly
 * when using streaming, epoch will get reset to 0. that means order of items passed to a model would be the same,
   if the seed does not change. actual train_dataloader seed would be: 
   `train_dataloader.dataset.set_epoch(train_dataloader.dataset._epoch + 1)`
