@@ -17,16 +17,39 @@ The code in this repository is a modified version of code from
   source src/run.sh 2>&1 | tee train_run_<run_number>.log
   ```
 
-## Fine-tuning todos:
+## TODO:
+* check exact sizes of train, eval, test sets of CommonVoice 11
+* fill TODOs in Notes section with answers and discussions from a Discord
+  * https://discord.com/channels/879548962464493619/1045270618729361439/1050429189947408475
+
+### Fine-tuning
 * upd all .sh scripts to use `tee` and create `logs` dir
 * logs are printed only right before the evalutaion:<br>
   ```
   --logging_steps="50"
   --eval_steps="1000"
   ```
-* check exact sizes of train, eval, test sets of CommonVoice 11
-* fill TODOs in Notes section with answers and discussions from a Discord
-  * https://discord.com/channels/879548962464493619/1045270618729361439/1050429189947408475
+
+### Evaluation
+
+#### Fleurs
+* Fleurs dataset contains multiple voicings of same sentences - confirm that. e.g.:
+  * `audio_path='3208476310630955776.wav'`
+  * `audio_path='18432407656171360869.wav'`
+  * `audio_path='4977735674010378775.wav'`
+* Can't use Whisper's text normalization, because text inside parenthesis was voiced in Fleurs.
+  see `audio_path = '10408937009990230772.wav'`
+* Transcriptions in Fleurs contain:
+  * unnormalized text with numbers written as digits: e.g. `audio_path='15454108795071358409.wav'`
+  * non-belarusian words. e.g. `audio_path='3083565517142153888.wav'`
+  * cyrillic transcription of English words. e.g. `audio_path='8551756870735878885.wav'`
+  * abbreviations. e.g. `audio_path='13661479120400313348.wav'`.<br>
+    `reference_norm="бесправадная сетка стандарту 802 11n выкарыстоўвае частоты 2 4 ггц і 5 0 ггц "`
+* sometimes transcriptions do not match voiced text. e.g.:
+  * `audio_path="17735478096436983770.wav"`
+  * `reference_norm="у 2005 фінансавым годзе..."`
+  * voiced text = "у 2005 годзе фінансавым годзе..."
+
 
 ## Resuming training from exising checkpoint
 When resuming training from existing checkpoint:
