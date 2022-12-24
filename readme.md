@@ -21,6 +21,7 @@ The code in this repository is a modified version of code from
 * check exact sizes of train, eval, test sets of CommonVoice 11
 * fill TODOs in Notes section with answers and discussions from a Discord
   * https://discord.com/channels/879548962464493619/1045270618729361439/1050429189947408475
+* train & evaluate on extended Common Voice 11 dataset (with multiple voicings allowed for same sentence)
 
 ### Fine-tuning
 * upd all .sh scripts to use `tee` and create `logs` dir
@@ -33,7 +34,10 @@ The code in this repository is a modified version of code from
 ### Evaluation
 * Currently model hallucinates during inference a lot. 
   Probable reason is that such audiofiles contain large segments of silence.
-* Check if model hallucinates during training
+* Check if model hallucinates on Common Voice dataset (validation & test)
+* Check if model hallucinates during training.
+  not sure how to do this except by printing in append mode examples from a train batch that
+  have large WER. it would require modifying training loop.
 
 #### Fleurs
 * Fleurs dataset contains multiple voicings of same sentences - confirm that. e.g.:
