@@ -31,6 +31,9 @@ The code in this repository is a modified version of code from
   ```
 
 ### Evaluation
+* Currently model hallucinates during inference a lot. 
+  Probable reason is that such audiofiles contain large segments of silence.
+* Check if model hallucinates during training
 
 #### Fleurs
 * Fleurs dataset contains multiple voicings of same sentences - confirm that. e.g.:
@@ -49,6 +52,14 @@ The code in this repository is a modified version of code from
   * `audio_path="17735478096436983770.wav"`
   * `reference_norm="у 2005 фінансавым годзе..."`
   * voiced text = "у 2005 годзе фінансавым годзе..."
+* There is a 
+  [Discussion on Fleurs issues for Armenian](https://huggingface.co/datasets/google/fleurs/discussions/8). 
+  Can create similar Discussion for Belarusian and propose to remove problematic examples.
+
+### Demo
+* Using `chunk_length_s` is very experimental with seq2seq models. The results will not necessarily be entirely accurate and will have caveats. More information: https://github.com/huggingface/transformers/pull/20104. Ignore this warning with pipeline(..., ignore_warning=True)
+* /home/user/.pyenv/versions/3.8.9/lib/python3.8/site-packages/transformers/generation/utils.py:1134: UserWarning: You have modified the pretrained model configuration to control generation. This is a deprecated strategy to control generation and will be removed soon, in a future version. Please use a generation configuration file (see https://huggingface.co/docs/transformers/main_classes/text_generation)
+* /home/user/.pyenv/versions/3.8.9/lib/python3.8/site-packages/transformers/pipelines/base.py:1043: UserWarning: You seem to be using the pipelines sequentially on GPU. In order to maximize efficiency please use a dataset
 
 
 ## Resuming training from exising checkpoint
@@ -125,6 +136,23 @@ When resuming training from existing checkpoint:
 * Need to set `use_cache` to False since we're using gradient checkpointing, and the two are incompatible
 * Default Linear scheduler is used 
 * Default Adam optimizer is used
+
+### Hallcunations in model predictions:
+* from https://discord.com/channels/879548962464493619/1052230104304074793/1052282095596224632:
+  * In my experience the model hallucinates in one of two scenarios:
+    * When there is long period of silences in an audio
+    * When the model was trained with a data mismatch i.e. there were cases where the audio file and the transcription does not match.
+  * Just a headsup, the Whisper model can only handle 30sec of audio in one go. 
+    During training any audio longerthan 30sec is automatically truncated.
+    While we truncate the audio, the text transcript still remains the same. 
+    This results in a mismatch between the audio and the reference transcription.
+  * I'd recommend filtering out all the data points which are longer than 30 sec from your train set.
+
+* from https://discord.com/channels/879548962464493619/1052230104304074793/1052797714678693950:
+  * Turns out the problem was caused by transformers version(Working fine: 4.25.1 and higher(master branch as well)
+  * Casing hallucinations: 4.24.0
+  * I think the problem was caused by tokenizer, though I havent investigated further (any way the behaviour is fixed)
+  * After switching to 4.25.1 medium training went much better
 
 ### Logs not printed when expected
 * Train logs are printed only before start of a validation. 
