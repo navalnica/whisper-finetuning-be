@@ -7,3 +7,4 @@ jiwer
 evaluate>=0.3.0
 more-itertools
 tensorboard
+openpyxl
