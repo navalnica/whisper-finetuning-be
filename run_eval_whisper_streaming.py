@@ -10,6 +10,7 @@ from transformers import pipeline
 from transformers.models.whisper.english_normalizer import BasicTextNormalizer
 from datasets import load_dataset, Audio
 import evaluate
+import jiwer
 
 from belarusian_text_normalizer import BelarusianTextNormalizer
 
@@ -31,6 +32,21 @@ logger.setLevel(logging.INFO)
 
 wer_metric = evaluate.load("wer")
 text_normalizer = BelarusianTextNormalizer()
+
+
+def pull_columns(df: pd.DataFrame, cols) -> pd.DataFrame:
+    """ Pull columns to the beginning of the dataframe """
+    if isinstance(cols, str):
+        cols = [cols]
+    cols = list(cols)
+
+    absent_cols = list(set(cols).difference(df.columns))
+    assert len(absent_cols) == 0, f'{absent_cols} columns are absent in df'
+
+    cols_rest = [c for c in df.columns if c not in cols]
+    new_df = df[cols + cols_rest].copy()
+    assert new_df.shape[1] == df.shape[1]
+    return new_df
 
 
 def is_target_text_in_range(ref):
@@ -106,15 +122,30 @@ def main(args):
     logger.info(f'WER: {wer}')
 
     if args.save_predictions is True:
-        preds_fp = f'preds_{args.dataset}_{args.config}_{args.split}_{now_str}.tsv'
+        preds_fp = f'preds_{args.dataset}_{args.config}_{args.split}_{now_str}.xlsx'
         preds_fp = clean_filename(preds_fp)
         logger.info(f'saving predictions to: "{preds_fp}"')
+
         preds_df = pd.DataFrame({
             'audio_path': audio_paths, 
             'prediction_norm': predictions_norm, 'reference_norm': references_norm,
             'prediction': predictions, 'reference': references, 
         })
-        preds_df.to_csv(preds_fp, sep='\t', index=False)
+
+        logger.info('computing WER for each item individually')
+        preds_df['wer'] = preds_df.apply(
+            lambda row: 100 * jiwer.wer(
+                truth=row['reference_norm'], hypothesis=row['prediction_norm']),
+            axis=1
+        )
+        preds_df.sort_values('wer', ascending=False, inplace=True)
+
+        # use pull_columns instead of direct dataframe indexing 
+        # not to delete any columns that could be added to dataframe in future.
+        cols_order = ['audio_path', 'wer', 'prediction_norm', 'reference_norm', 'prediction', 'reference']
+        preds_df = pull_columns(preds_df, cols=cols_order)
+
+        preds_df.to_excel(preds_fp, index=False)
     else:
         logger.info('save_predictions is False. will not save predictions to a file')
 
