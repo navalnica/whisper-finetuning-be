@@ -17,13 +17,24 @@ The code in this repository is a modified version of code from
   source src/run.sh 2>&1 | tee train_run_<run_number>.log
   ```
 
-## TODO:
+## TODO
+* upload CV11 eda
+* read more about chunking and striding during inference:
+  * https://discord.com/channels/879548962464493619/1050962020004020246/1054518630999666709
+  * https://github.com/huggingface/transformers/pull/20104
 * check exact sizes of train, eval, test sets of CommonVoice 11
 * fill TODOs in Notes section with answers and discussions from a Discord
   * https://discord.com/channels/879548962464493619/1045270618729361439/1050429189947408475
 * train & evaluate on extended Common Voice 11 dataset (with multiple voicings allowed for same sentence)
+* view [event intro video](https://www.youtube.com/watch?v=1cVBLOMlv3w)
 
 ### Fine-tuning
+* We fine-tune Whisper that uses constant 30-seconds windows on Common Voice data that is mostly 5-8 seconds long.<br>
+  Thus, most of input features are padded values (zeros).<br>
+  Fine-tuned model produces lots of repetitions on long audiofile (>8s long).<br>
+  To make model be able to predict for any audiofile with length <30 seconds, 
+  we need to combine multiple short audiofiles and transcriptions into 30-seconds length audiofile.<br>
+  However, as combined transcriptions would not be related to each other, this may decrease model performance.
 * upd all .sh scripts to use `tee` and create `logs` dir
 * logs are printed only right before the evalutaion:<br>
   ```
@@ -31,13 +42,12 @@ The code in this repository is a modified version of code from
   --eval_steps="1000"
   ```
 
-### Evaluation
-* Currently model hallucinates during inference a lot. 
-  Probable reason is that such audiofiles contain large segments of silence.
-* Check if model hallucinates on Common Voice dataset (validation & test)
-* Check if model hallucinates during training.
-  not sure how to do this except by printing in append mode examples from a train batch that
-  have large WER. it would require modifying training loop.
+### Evaluation & Inference
+* Can we use chunking and striding during inference with transformer encoder-decoder models?<br>
+  we definitely can with CTC models. Check [this guide](https://huggingface.co/blog/asr-chunking)
+* Check whether hallucinations happen during inference without chunking (test long audiofiles)
+* Check if model hallucinates on any data from Common Voice dataset (validation & test & probably samples from train).
+  It was fine-tuned on Common Voice.
 
 #### Fleurs
 * Fleurs dataset contains multiple voicings of same sentences - confirm that. e.g.:
@@ -141,7 +151,26 @@ When resuming training from existing checkpoint:
 * Default Linear scheduler is used 
 * Default Adam optimizer is used
 
-### Hallcunations in model predictions:
+### Hallcunations, inference, chunking and striding
+* observed when running inference for long audiofiles 
+  using transformers `autumatic-speech-recognition` pipeline with `chunk_length_s=30`
+* Probable hallucinations reasons:
+  * running model on audiochunks that are longer compared to ones the model was trained on
+  * overfit on Common Voice 11 data. poor generalization to real-world audio
+  * audiofiles contain large segments of silence
+* TODO: check whether hallucinations happen during inference without chunking
+* decreasing chunk size from 30 to `chunk_length_s=8` helped. Model doesn't hallucinate.
+* when using `chunk_length_s=5` hallucinations appear again
+* model struggles to predict correctly close to chunk borders.<br>
+  near chunk borders model often predicts periods (`.`) instead of letters or may even skip some words.<br>
+  striding does not seem to help very much.
+* however, `chunk_length_s=8` and `stride_length_s=1` seem to produce best transcriptions so far.
+* default striding value `stride_length_s = chunk_length_s / 6` also performs well, 
+  but a bit worse than `stride_length_s=1` (at least for one particular test sample).
+* using large striding (2, 3, 4) makes predictions worse
+* I wonder whether we even can use chunking for transformer-based encoder-decoder architecture like in Whisper
+
+### Other hallucination notes
 * from https://discord.com/channels/879548962464493619/1052230104304074793/1052282095596224632:
   * In my experience the model hallucinates in one of two scenarios:
     * When there is long period of silences in an audio
@@ -151,7 +180,6 @@ When resuming training from existing checkpoint:
     While we truncate the audio, the text transcript still remains the same. 
     This results in a mismatch between the audio and the reference transcription.
   * I'd recommend filtering out all the data points which are longer than 30 sec from your train set.
-
 * from https://discord.com/channels/879548962464493619/1052230104304074793/1052797714678693950:
   * Turns out the problem was caused by transformers version(Working fine: 4.25.1 and higher(master branch as well)
   * Casing hallucinations: 4.24.0
