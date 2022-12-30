@@ -44,7 +44,10 @@ The code in this repository is a modified version of code from
 
 ### Evaluation & Inference
 * Can we use chunking and striding during inference with transformer encoder-decoder models?<br>
-  we definitely can with CTC models. Check [this guide](https://huggingface.co/blog/asr-chunking)
+  we definitely can with CTC models. Check [this guide](https://huggingface.co/blog/asr-chunking)<br>
+  In CTC case we predict probabilities of each character for each time point.<br>
+  In contrast, for transformer encoder-decoder models we predict entire sequence without direct
+  correspondence to time stamps.
 * Check whether hallucinations happen during inference without chunking (test long audiofiles)
 * Check if model hallucinates on any data from Common Voice dataset (validation & test & probably samples from train).
   It was fine-tuned on Common Voice.
