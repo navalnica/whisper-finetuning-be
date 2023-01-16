@@ -13,7 +13,7 @@ You can find fine-tuned models and their demos here:
 |Model type|CommonVoice11 test WER|CommonVoice11 dev WER|Model link|Model demo|
 |---|---|---|---|---|
 |Whisper Small|6.79%|6.367%|[ales/whisper-small-belarusian](https://huggingface.co/ales/whisper-small-belarusian)|[ales/whisper-small-belarusian-demo](https://huggingface.co/spaces/ales/whisper-small-belarusian-demo)|
-|Whisper Base|-|6.79%|[ales/whisper-base-belarusian](https://huggingface.co/ales/whisper-base-belarusian)|-|
+|Whisper Base|-|12.207%|[ales/whisper-base-belarusian](https://huggingface.co/ales/whisper-base-belarusian)|-|
 
 
 ## Tips:
