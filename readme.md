@@ -8,7 +8,7 @@ hosted by HuggingFace x Lambda.
 * The code in this repository is a modified version of code from 
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event) repo.
 
-### Models and demo
+### Models and demos
 You can find fine-tuned models and their demos here:
 |Model type|CommonVoice11 test WER|CommonVoice11 dev WER|Model link|Model demo|
 |---|---|---|---|---|
