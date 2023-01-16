@@ -1,11 +1,20 @@
 ## Description
 
-Fine-tuning [OpenAI Whisper](https://github.com/openai/whisper) model for Belarusian language during 
+### Whisper Fine-Tuning Event
+
+* Fine-tuning [OpenAI Whisper](https://github.com/openai/whisper) model for Belarusian language during 
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event)
 hosted by HuggingFace x Lambda.
-
-The code in this repository is a modified version of code from 
+* The code in this repository is a modified version of code from 
 [Whisper fine-tuning Event](https://github.com/huggingface/community-events/tree/main/whisper-fine-tuning-event) repo.
+
+### Models and demo
+You can find fine-tuned models and their demos here:
+|Model type|CommonVoice11 test WER|CommonVoice11 dev WER|Model link|Model demo|
+|---|---|---|---|---|
+|Whisper Small|6.79%|6.367%|[ales/whisper-small-belarusian](https://huggingface.co/ales/whisper-small-belarusian)|[ales/whisper-small-belarusian-demo](https://huggingface.co/spaces/ales/whisper-small-belarusian-demo)|
+|Whisper Base|-|6.79%|[ales/whisper-base-belarusian](https://huggingface.co/ales/whisper-base-belarusian)|-|
+
 
 ## Tips:
 * start with a port worwarding to monitor Tensorboard logs on local computer:
