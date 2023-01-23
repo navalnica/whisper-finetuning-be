@@ -52,11 +52,16 @@ You can find fine-tuned models and their demos here:
   ```
 
 ### Evaluation & Inference
-* Can we use chunking and striding during inference with transformer encoder-decoder models?<br>
-  we definitely can with CTC models. Check [this guide](https://huggingface.co/blog/asr-chunking)<br>
-  In CTC case we predict probabilities of each character for each time point.<br>
-  In contrast, for transformer encoder-decoder models we predict entire sequence without direct
-  correspondence to time stamps.
+* Can we use chunking and striding during inference with transformer encoder-decoder models?
+  * We definitely can with CTC models. Check [this guide](https://huggingface.co/blog/asr-chunking)<br>
+    In CTC case we predict probabilities of each character for each time point
+  * In contrast, for transformer encoder-decoder models we predict entire sequence without direct
+    correspondence to time stamps.
+  * See NVIDIA NeMo docs on
+    [cache-aware-streaming-conformer](https://docs.nvidia.com/deeplearning/nemo/user-guide/docs/en/stable/asr/models.html?highlight=buffered#cache-aware-streaming-conformer).
+    It mentions:
+    > streaming Conformers are trained with limited right context that it would make it possible 
+      to match how the model is being used in both the training and inference
 * Check whether hallucinations happen during inference without chunking (test long audiofiles)
 * Check if model hallucinates on any data from Common Voice dataset (validation & test & probably samples from train).
   It was fine-tuned on Common Voice.
