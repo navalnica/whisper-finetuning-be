@@ -62,6 +62,9 @@ You can find fine-tuned models and their demos here:
     It mentions:
     > streaming Conformers are trained with limited right context that it would make it possible 
       to match how the model is being used in both the training and inference
+  * See also NVIDIA NeMo[Intro_to_Transducers.ipynb](https://colab.research.google.com/github/NVIDIA/NeMo/blob/stable/tutorials/asr/Intro_to_Transducers.ipynb)
+    It mentions:
+    >  By design attention models require the entire sequence to be available to align the sequence to the output, thereby preventing their use for streaming inference.
 * Check whether hallucinations happen during inference without chunking (test long audiofiles)
 * Check if model hallucinates on any data from Common Voice dataset (validation & test & probably samples from train).
   It was fine-tuned on Common Voice.
