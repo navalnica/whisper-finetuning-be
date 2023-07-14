@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Union, Iterable
 
 import datasets
 import torch
-from datasets import DatasetDict, IterableDatasetDict, interleave_datasets, load_dataset
+from datasets import DatasetDict, IterableDatasetDict, interleave_datasets, load_dataset, load_from_disk
 from torch.utils.data import IterableDataset
 
 import evaluate
@@ -65,11 +65,18 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CustomTrainingArguments:
     """ Custom trianing arguments """
-    
+
     learning_rate_end: Optional[float] = field(
         default=None,
         metadata={
             "help": ('Learning rate in the end of a training run. Passed to a Seq2SeqTrainerCustomLinearScheduler.')
+        },
+    )
+
+    from_disk: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": ('Use prepared CommonVoice dataset from disk')
         },
     )
 
@@ -241,7 +248,6 @@ class DataTrainingArguments:
     )
 
 
-
 @dataclass
 class DataCollatorSpeechSeq2SeqWithPadding:
     """
@@ -301,13 +307,45 @@ def load_maybe_streaming_dataset(dataset_name, dataset_config_name, split="train
         return dataset
 
 
+def load_maybe_streaming_dataset_from_disk(dataset_path, split="train", streaming=True, **kwargs):
+    """
+    Utility function to load a dataset from disk. For datasets with multiple splits,
+    each split is loaded individually and then splits combined by taking alternating examples from
+    each (interleaving).
+    """
+    if "+" in split:
+        # load multiple splits separated by the `+` symbol with streaming mode
+        dataset = load_from_disk(dataset_path)
+        if streaming:
+            dataset = [
+                dataset[split_name].to_iterable_dataset()
+                for split_name in split.split("+")
+            ]
+        else:
+            dataset = [
+                dataset[split_name]
+                for split_name in split.split("+")
+            ]
+
+        # interleave multiple splits to form one dataset
+        interleaved_dataset = interleave_datasets(dataset)
+        return interleaved_dataset
+    else:
+        # load a single split *with* streaming mode
+        if streaming:
+            dataset = load_from_disk(dataset_path)[split].to_iterable_dataset()
+        else:
+            dataset = load_from_disk(dataset_path)[split]
+        return dataset
+
+
 def main():
     # 1. Parse input arguments
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
     parser = HfArgumentParser((
-        ModelArguments, DataTrainingArguments, 
+        ModelArguments, DataTrainingArguments,
         Seq2SeqTrainingArguments, CustomTrainingArguments
     ))
 
@@ -319,7 +357,6 @@ def main():
         )
     else:
         model_args, data_args, training_args, custom_training_args = parser.parse_args_into_dataclasses()
-
 
     # 2. Setup logging
     now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -360,12 +397,11 @@ def main():
     if is_main_process(training_args.local_rank):
         transformers.utils.logging.set_verbosity_info()
 
-
     # 3. Detecting last checkpoint and eventually continue from last checkpoint
     last_checkpoint = None
     if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
         logger.info(f'output_dir already exists. will try to load last checkpoint.')
-        
+
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is not None:
             if training_args.resume_from_checkpoint is None:
@@ -377,9 +413,9 @@ def main():
                 logger.info(f'Last checkpoint found at: {last_checkpoint}. Will ignore it and resume training '
                             f'from passed resume_from_checkpoint param: {training_args.resume_from_checkpoint}')
                 assert os.path.isdir(training_args.resume_from_checkpoint)
-        else:    
+        else:
             logger.info('last_checkpoint is None. will try to read from training_args.resume_from_checkpoint')
-            
+
             if training_args.resume_from_checkpoint is not None and os.path.isdir(training_args.resume_from_checkpoint):
                 logger.info(f'Will resume training from  passed resume_from_checkpoint param: '
                             f'{training_args.resume_from_checkpoint}')
@@ -389,7 +425,7 @@ def main():
 
                 dir_content = os.listdir(training_args.output_dir)
                 if len(dir_content) == 0:
-                    logger.info('output_dir is empty. will start training from scratch.')                    
+                    logger.info('output_dir is empty. will start training from scratch.')
                 else:
                     model_fn = 'pytorch_model.bin'
                     if model_fn in dir_content:
@@ -399,7 +435,7 @@ def main():
                     else:
                         allowed_dirs = ['.git', '.gitattributes', 'src']
                         unexpected_content = set(dir_content).difference(allowed_dirs)
-                        unexpected_content = [x for x in unexpected_content 
+                        unexpected_content = [x for x in unexpected_content
                                               if not x.endswith('.log') and os.path.isfile(x)]
                         if len(unexpected_content) > 0:
                             raise ValueError(
@@ -411,36 +447,48 @@ def main():
                         else:
                             logger.info(f'dir is not empty, but contains only: {dir_content}. '
                                         'it is OK - will start training')
-                        
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
 
-
     # 4. Load dataset
-
     # TODO: replace dataset dicts with single key to IterableDataset and to Dataset.
     # don't know how to do it know - using dict simply because they work.
     raw_train = IterableDatasetDict() if data_args.streaming_train else DatasetDict()
     raw_eval = IterableDatasetDict() if data_args.streaming_eval else DatasetDict()
 
-    if training_args.do_train:
-        raw_train['train'] = load_maybe_streaming_dataset(
-            data_args.dataset_name,
-            data_args.dataset_config_name,
-            split=data_args.train_split_name,
-            use_auth_token=True if model_args.use_auth_token else None,
-            streaming=data_args.streaming_train,
-        )
+    # Dataset which located in disk
+    if custom_training_args.from_disk:
+        if training_args.do_train:
+            raw_train['train'] = load_maybe_streaming_dataset_from_disk(
+                data_args.dataset_name,
+                split=data_args.train_split_name,
+            )
 
-    if training_args.do_eval:
-        raw_eval['eval'] = load_maybe_streaming_dataset(
-            data_args.dataset_name,
-            data_args.dataset_config_name,
-            split=data_args.eval_split_name,
-            use_auth_token=True if model_args.use_auth_token else None,
-            streaming=data_args.streaming_eval,
-        )
+        if training_args.do_eval:
+            raw_eval['eval'] = load_maybe_streaming_dataset_from_disk(
+                data_args.dataset_name,
+                split=data_args.eval_split_name,
+            )
+    # Dataset from Hugging Face Space
+    else:
+        if training_args.do_train:
+            raw_train['train'] = load_maybe_streaming_dataset(
+                data_args.dataset_name,
+                data_args.dataset_config_name,
+                split=data_args.train_split_name,
+                use_auth_token=True if model_args.use_auth_token else None,
+                streaming=data_args.streaming_train,
+            )
+
+        if training_args.do_eval:
+            raw_eval['eval'] = load_maybe_streaming_dataset(
+                data_args.dataset_name,
+                data_args.dataset_config_name,
+                split=data_args.eval_split_name,
+                use_auth_token=True if model_args.use_auth_token else None,
+                streaming=data_args.streaming_eval,
+            )
 
     raw_datasets_features = list(next(iter(raw_train.values())).features.keys())
 
@@ -457,7 +505,6 @@ def main():
             "Make sure to set `--text_column_name` to the correct text column - one of "
             f"{', '.join(raw_datasets_features)}."
         )
-
 
     # 5. Load pretrained model, tokenizer, and feature extractor
     #
@@ -509,21 +556,20 @@ def main():
         # We only need to set the task id when the language is specified (i.e. in a multilingual setting)
         tokenizer.set_prefix_tokens(language=data_args.language, task=data_args.task)
 
-
     # 6. Explicitly resample speech dataset
-    raw_train = raw_train.cast_column(
-        data_args.audio_column_name, datasets.features.Audio(
-            sampling_rate=feature_extractor.sampling_rate,
-            mono=True
+    if not custom_training_args.from_disk:
+        raw_train = raw_train.cast_column(
+            data_args.audio_column_name, datasets.features.Audio(
+                sampling_rate=feature_extractor.sampling_rate,
+                mono=True
+            )
         )
-    )
-    raw_eval = raw_eval.cast_column(
-        data_args.audio_column_name, datasets.features.Audio(
-            sampling_rate=feature_extractor.sampling_rate,
-            mono=True
+        raw_eval = raw_eval.cast_column(
+            data_args.audio_column_name, datasets.features.Audio(
+                sampling_rate=feature_extractor.sampling_rate,
+                mono=True
+            )
         )
-    )
-
 
     # 7. Preprocessing the datasets.
     # We need to read the audio files as arrays and tokenize the targets.
@@ -642,7 +688,6 @@ def main():
             input_columns=["labels_length"],
         )
 
-
     # 8. Load Metric
     metric = evaluate.load("wer")
     do_normalize_eval = data_args.do_normalize_eval
@@ -667,7 +712,6 @@ def main():
 
         return {"wer": wer}
 
-
     # 9. Create a single speech processor
     if is_main_process(training_args.local_rank):
         # save feature extractor, tokenizer and config
@@ -677,13 +721,11 @@ def main():
 
     processor = AutoProcessor.from_pretrained(training_args.output_dir)
 
-
     # 10. Define data collator
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
     )
-
 
     # 11. Configure Trainer
     # Trainer callback to reinitialise and reshuffle the streamable datasets at the beginning of each epoch
@@ -709,7 +751,6 @@ def main():
         callbacks=[ShuffleCallback()] if data_args.streaming_train else None,
     )
 
-
     # 12. Training
     if training_args.do_train:
         checkpoint = None
@@ -728,7 +769,6 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-
     # 13. Evaluation
     results = {}
     if training_args.do_eval:
@@ -743,7 +783,6 @@ def main():
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
-
 
     # 14. Write Training Stats
     kwargs = {
