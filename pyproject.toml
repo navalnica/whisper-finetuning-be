@@ -1,0 +1,27 @@
+[tool.black]
+line-length = 100
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+
+[project]
+name = "whisper-finetuning-be"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "black>=25.1.0",
+    "datasets>=3.3.0",
+    "evaluate>=0.3.0",
+    "isort>=6.0.0",
+    "jiwer>=3.1.0",
+    "librosa>=0.10.2.post1",
+    "mlflow>=2.20.2",
+    "more-itertools>=10.6.0",
+    "openpyxl>=3.1.5",
+    # TODO: remove tensorboard once we move to mlflow
+    "tensorboard>=2.19.0",
+    "torch>=1.7.0",
+    "torchaudio>=2.6.0",
+    "transformers>=4.48.3",
+]
