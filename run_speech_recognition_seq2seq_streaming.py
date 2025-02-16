@@ -20,20 +20,19 @@ with 🤗 Datasets' streaming mode.
 # You can also adapt this script for your own sequence to sequence speech
 # recognition task. Pointers for this are left as comments.
 
+import datetime
 import logging
 import os
 import sys
-import datetime
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union, Iterable
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 import datasets
+import evaluate
 import torch
+import transformers
 from datasets import DatasetDict, IterableDatasetDict, interleave_datasets, load_dataset
 from torch.utils.data import IterableDataset
-
-import evaluate
-import transformers
 from transformers import (
     AutoConfig,
     AutoFeatureExtractor,
@@ -51,25 +50,30 @@ from transformers.trainer_utils import get_last_checkpoint, is_main_process
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
-from custom_trainer import Seq2SeqTrainerCustomLinearScheduler
 from belarusian_text_normalizer import BelarusianTextNormalizer
+from custom_trainer import Seq2SeqTrainerCustomLinearScheduler
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.25.0.dev0")
 
-require_version("datasets>=1.18.2", "To fix: pip install -r examples/pytorch/speech-recognition/requirements.txt")
+require_version(
+    "datasets>=1.18.2",
+    "To fix: pip install -r examples/pytorch/speech-recognition/requirements.txt",
+)
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class CustomTrainingArguments:
-    """ Custom trianing arguments """
-    
+    """Custom trianing arguments"""
+
     learning_rate_end: Optional[float] = field(
         default=None,
         metadata={
-            "help": ('Learning rate in the end of a training run. Passed to a Seq2SeqTrainerCustomLinearScheduler.')
+            "help": (
+                'Learning rate in the end of a training run. Passed to a Seq2SeqTrainerCustomLinearScheduler.'
+            )
         },
     )
 
@@ -84,13 +88,16 @@ class ModelArguments:
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
     config_name: Optional[str] = field(
-        default=None, metadata={"help": "Pretrained config name or path if not the same as model_name"}
+        default=None,
+        metadata={"help": "Pretrained config name or path if not the same as model_name"},
     )
     tokenizer_name: Optional[str] = field(
-        default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+        default=None,
+        metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"},
     )
     feature_extractor_name: Optional[str] = field(
-        default=None, metadata={"help": "feature extractor name or path if not the same as model_name"}
+        default=None,
+        metadata={"help": "feature extractor name or path if not the same as model_name"},
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -98,11 +105,15 @@ class ModelArguments:
     )
     use_fast_tokenizer: bool = field(
         default=True,
-        metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
+        metadata={
+            "help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."
+        },
     )
     model_revision: str = field(
         default="main",
-        metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
+        metadata={
+            "help": "The specific model version to use (can be a branch name, tag name or commit id)."
+        },
     )
     use_auth_token: bool = field(
         default=False,
@@ -114,10 +125,12 @@ class ModelArguments:
         },
     )
     freeze_feature_encoder: bool = field(
-        default=True, metadata={"help": "Whether to freeze the feature encoder layers of the model."}
+        default=True,
+        metadata={"help": "Whether to freeze the feature encoder layers of the model."},
     )
     freeze_encoder: bool = field(
-        default=False, metadata={"help": "Whether to freeze the entire encoder of the seq2seq model."}
+        default=False,
+        metadata={"help": "Whether to freeze the entire encoder of the seq2seq model."},
     )
     forced_decoder_ids: List[List[int]] = field(
         default=None,
@@ -132,7 +145,9 @@ class ModelArguments:
     suppress_tokens: List[int] = field(
         default=None, metadata={"help": "A list of tokens that will be suppressed at generation."}
     )
-    model_index_name: str = field(default=None, metadata={"help": "Pretty name for the model card."})
+    model_index_name: str = field(
+        default=None, metadata={"help": "Pretty name for the model card."}
+    )
 
 
 @dataclass
@@ -142,10 +157,14 @@ class DataTrainingArguments:
     """
 
     dataset_name: str = field(
-        default=None, metadata={"help": "The name of the dataset to use (via the datasets library)."}
+        default=None,
+        metadata={"help": "The name of the dataset to use (via the datasets library)."},
     )
     dataset_config_name: Optional[str] = field(
-        default=None, metadata={"help": "The configuration name of the dataset to use (via the datasets library)."}
+        default=None,
+        metadata={
+            "help": "The configuration name of the dataset to use (via the datasets library)."
+        },
     )
     max_train_samples: Optional[int] = field(
         default=None,
@@ -167,11 +186,15 @@ class DataTrainingArguments:
     )
     audio_column_name: str = field(
         default="audio",
-        metadata={"help": "The name of the dataset column containing the audio data. Defaults to 'audio'"},
+        metadata={
+            "help": "The name of the dataset column containing the audio data. Defaults to 'audio'"
+        },
     )
     text_column_name: str = field(
         default="text",
-        metadata={"help": "The name of the dataset column containing the text data. Defaults to 'text'"},
+        metadata={
+            "help": "The name of the dataset column containing the text data. Defaults to 'text'"
+        },
     )
     max_duration_in_seconds: float = field(
         default=20.0,
@@ -183,7 +206,10 @@ class DataTrainingArguments:
         },
     )
     min_duration_in_seconds: float = field(
-        default=0.0, metadata={"help": "Filter audio files that are shorter than `min_duration_in_seconds` seconds"}
+        default=0.0,
+        metadata={
+            "help": "Filter audio files that are shorter than `min_duration_in_seconds` seconds"
+        },
     )
     train_split_name: str = field(
         default="train",
@@ -207,7 +233,9 @@ class DataTrainingArguments:
     )
     do_normalize_eval: bool = field(
         default=True,
-        metadata={"help": "Whether to normalise the references and predictions in the eval WER calculation."},
+        metadata={
+            "help": "Whether to normalise the references and predictions in the eval WER calculation."
+        },
     )
     language: str = field(
         default=None,
@@ -220,7 +248,9 @@ class DataTrainingArguments:
     )
     task: str = field(
         default="transcribe",
-        metadata={"help": "Task, either `transcribe` for speech recognition or `translate` for speech translation."},
+        metadata={
+            "help": "Task, either `transcribe` for speech recognition or `translate` for speech translation."
+        },
     )
     shuffle_buffer_size: Optional[int] = field(
         default=500,
@@ -237,9 +267,10 @@ class DataTrainingArguments:
     )
     streaming_eval: bool = field(
         default=True,
-        metadata={"help": "Whether to use streaming mode to load and pre-process the evaluation split."},
+        metadata={
+            "help": "Whether to use streaming mode to load and pre-process the evaluation split."
+        },
     )
-
 
 
 @dataclass
@@ -256,7 +287,9 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     processor: Any
     decoder_start_token_id: int
 
-    def __call__(self, features: List[Dict[str, Union[List[int], torch.Tensor]]]) -> Dict[str, torch.Tensor]:
+    def __call__(
+        self, features: List[Dict[str, Union[List[int], torch.Tensor]]]
+    ) -> Dict[str, torch.Tensor]:
         # split inputs and labels since they have to be of different lengths and need
         # different padding methods
         model_input_name = self.processor.model_input_names[0]
@@ -280,7 +313,9 @@ class DataCollatorSpeechSeq2SeqWithPadding:
         return batch
 
 
-def load_maybe_streaming_dataset(dataset_name, dataset_config_name, split="train", streaming=True, **kwargs):
+def load_maybe_streaming_dataset(
+    dataset_name, dataset_config_name, split="train", streaming=True, **kwargs
+):
     """
     Utility function to load a dataset in streaming mode. For datasets with multiple splits,
     each split is loaded individually and then splits combined by taking alternating examples from
@@ -289,7 +324,9 @@ def load_maybe_streaming_dataset(dataset_name, dataset_config_name, split="train
     if "+" in split:
         # load multiple splits separated by the `+` symbol with streaming mode
         dataset_splits = [
-            load_dataset(dataset_name, dataset_config_name, split=split_name, streaming=streaming, **kwargs)
+            load_dataset(
+                dataset_name, dataset_config_name, split=split_name, streaming=streaming, **kwargs
+            )
             for split_name in split.split("+")
         ]
         # interleave multiple splits to form one dataset
@@ -297,7 +334,9 @@ def load_maybe_streaming_dataset(dataset_name, dataset_config_name, split="train
         return interleaved_dataset
     else:
         # load a single split *with* streaming mode
-        dataset = load_dataset(dataset_name, dataset_config_name, split=split, streaming=streaming, **kwargs)
+        dataset = load_dataset(
+            dataset_name, dataset_config_name, split=split, streaming=streaming, **kwargs
+        )
         return dataset
 
 
@@ -306,10 +345,9 @@ def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
     # We now keep distinct sets of args, for a cleaner separation of concerns.
-    parser = HfArgumentParser((
-        ModelArguments, DataTrainingArguments, 
-        Seq2SeqTrainingArguments, CustomTrainingArguments
-    ))
+    parser = HfArgumentParser(
+        (ModelArguments, DataTrainingArguments, Seq2SeqTrainingArguments, CustomTrainingArguments)
+    )
 
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
@@ -318,8 +356,9 @@ def main():
             json_file=os.path.abspath(sys.argv[1])
         )
     else:
-        model_args, data_args, training_args, custom_training_args = parser.parse_args_into_dataclasses()
-
+        model_args, data_args, training_args, custom_training_args = (
+            parser.parse_args_into_dataclasses()
+        )
 
     # 2. Setup logging
     now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -345,8 +384,10 @@ def main():
 
     # update training_args if needed
     if custom_training_args.learning_rate_end is not None:
-        logger.info(f'found learning_rate_end={custom_training_args.learning_rate_end} in passed arguments. '
-                    'will pass it to training_args')
+        logger.info(
+            f'found learning_rate_end={custom_training_args.learning_rate_end} in passed arguments. '
+            'will pass it to training_args'
+        )
         training_args.learning_rate_end = custom_training_args.learning_rate_end
     else:
         logger.info(f'learning_rate_end is None. will not pass it to training_args')
@@ -360,12 +401,15 @@ def main():
     if is_main_process(training_args.local_rank):
         transformers.utils.logging.set_verbosity_info()
 
-
     # 3. Detecting last checkpoint and eventually continue from last checkpoint
     last_checkpoint = None
-    if os.path.isdir(training_args.output_dir) and training_args.do_train and not training_args.overwrite_output_dir:
+    if (
+        os.path.isdir(training_args.output_dir)
+        and training_args.do_train
+        and not training_args.overwrite_output_dir
+    ):
         logger.info(f'output_dir already exists. will try to load last checkpoint.')
-        
+
         last_checkpoint = get_last_checkpoint(training_args.output_dir)
         if last_checkpoint is not None:
             if training_args.resume_from_checkpoint is None:
@@ -374,33 +418,48 @@ def main():
                     "the `--output_dir` or add `--overwrite_output_dir` to train from scratch."
                 )
             else:
-                logger.info(f'Last checkpoint found at: {last_checkpoint}. Will ignore it and resume training '
-                            f'from passed resume_from_checkpoint param: {training_args.resume_from_checkpoint}')
+                logger.info(
+                    f'Last checkpoint found at: {last_checkpoint}. Will ignore it and resume training '
+                    f'from passed resume_from_checkpoint param: {training_args.resume_from_checkpoint}'
+                )
                 assert os.path.isdir(training_args.resume_from_checkpoint)
-        else:    
-            logger.info('last_checkpoint is None. will try to read from training_args.resume_from_checkpoint')
-            
-            if training_args.resume_from_checkpoint is not None and os.path.isdir(training_args.resume_from_checkpoint):
-                logger.info(f'Will resume training from  passed resume_from_checkpoint param: '
-                            f'{training_args.resume_from_checkpoint}')
+        else:
+            logger.info(
+                'last_checkpoint is None. will try to read from training_args.resume_from_checkpoint'
+            )
+
+            if training_args.resume_from_checkpoint is not None and os.path.isdir(
+                training_args.resume_from_checkpoint
+            ):
+                logger.info(
+                    f'Will resume training from  passed resume_from_checkpoint param: '
+                    f'{training_args.resume_from_checkpoint}'
+                )
             else:
-                logger.info('last_checkpoint is None. resume_from_checkpoint is either None or not existing dir. '
-                            'will try to read from the model saved in the root of output_dir.')
+                logger.info(
+                    'last_checkpoint is None. resume_from_checkpoint is either None or not existing dir. '
+                    'will try to read from the model saved in the root of output_dir.'
+                )
 
                 dir_content = os.listdir(training_args.output_dir)
                 if len(dir_content) == 0:
-                    logger.info('output_dir is empty. will start training from scratch.')                    
+                    logger.info('output_dir is empty. will start training from scratch.')
                 else:
                     model_fn = 'pytorch_model.bin'
                     if model_fn in dir_content:
-                        logger.info(f'found {model_fn} inside output_dir. '
-                                    f'will continue training treating output_dir as a last checkpoint.')
+                        logger.info(
+                            f'found {model_fn} inside output_dir. '
+                            f'will continue training treating output_dir as a last checkpoint.'
+                        )
                         last_checkpoint = training_args.output_dir
                     else:
                         allowed_dirs = ['.git', '.gitattributes', 'src']
                         unexpected_content = set(dir_content).difference(allowed_dirs)
-                        unexpected_content = [x for x in unexpected_content 
-                                              if not x.endswith('.log') and os.path.isfile(x)]
+                        unexpected_content = [
+                            x
+                            for x in unexpected_content
+                            if not x.endswith('.log') and os.path.isfile(x)
+                        ]
                         if len(unexpected_content) > 0:
                             raise ValueError(
                                 f'Could not find last_checkpoint, resume_from_checkpoint is either None '
@@ -409,13 +468,13 @@ def main():
                                 f'unexpected_content: {unexpected_content}'
                             )
                         else:
-                            logger.info(f'dir is not empty, but contains only: {dir_content}. '
-                                        'it is OK - will start training')
-                        
+                            logger.info(
+                                f'dir is not empty, but contains only: {dir_content}. '
+                                'it is OK - will start training'
+                            )
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
-
 
     # 4. Load dataset
 
@@ -458,7 +517,6 @@ def main():
             f"{', '.join(raw_datasets_features)}."
         )
 
-
     # 5. Load pretrained model, tokenizer, and feature extractor
     #
     # Distributed training:
@@ -470,13 +528,22 @@ def main():
         use_auth_token=True if model_args.use_auth_token else None,
     )
 
-    config.update({"forced_decoder_ids": model_args.forced_decoder_ids, "suppress_tokens": model_args.suppress_tokens})
+    config.update(
+        {
+            "forced_decoder_ids": model_args.forced_decoder_ids,
+            "suppress_tokens": model_args.suppress_tokens,
+        }
+    )
 
     if training_args.gradient_checkpointing:
         config.update({"use_cache": False})
 
     feature_extractor = AutoFeatureExtractor.from_pretrained(
-        model_args.feature_extractor_name if model_args.feature_extractor_name else model_args.model_name_or_path,
+        (
+            model_args.feature_extractor_name
+            if model_args.feature_extractor_name
+            else model_args.model_name_or_path
+        ),
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
         use_auth_token=True if model_args.use_auth_token else None,
@@ -509,21 +576,15 @@ def main():
         # We only need to set the task id when the language is specified (i.e. in a multilingual setting)
         tokenizer.set_prefix_tokens(language=data_args.language, task=data_args.task)
 
-
     # 6. Explicitly resample speech dataset
     raw_train = raw_train.cast_column(
-        data_args.audio_column_name, datasets.features.Audio(
-            sampling_rate=feature_extractor.sampling_rate,
-            mono=True
-        )
+        data_args.audio_column_name,
+        datasets.features.Audio(sampling_rate=feature_extractor.sampling_rate, mono=True),
     )
     raw_eval = raw_eval.cast_column(
-        data_args.audio_column_name, datasets.features.Audio(
-            sampling_rate=feature_extractor.sampling_rate,
-            mono=True
-        )
+        data_args.audio_column_name,
+        datasets.features.Audio(sampling_rate=feature_extractor.sampling_rate, mono=True),
     )
-
 
     # 7. Preprocessing the datasets.
     # We need to read the audio files as arrays and tokenize the targets.
@@ -536,7 +597,9 @@ def main():
     model_input_name = feature_extractor.model_input_names[0]
     do_lower_case = data_args.do_lower_case
     do_remove_punctuation = data_args.do_remove_punctuation
-    normalizer = BelarusianTextNormalizer()  # custom normalizer based on 'official' text normalizer from OpenAI
+    normalizer = (
+        BelarusianTextNormalizer()
+    )  # custom normalizer based on 'official' text normalizer from OpenAI
 
     if data_args.max_train_samples is not None:
         raw_train['train'] = (
@@ -591,28 +654,48 @@ def main():
             logger.info(f'will preprocess data using {num_proc} processes.')
 
         if data_args.streaming_train:
-            vectorized_train['train'] = raw_train['train'].map(
-                prepare_dataset, remove_columns=raw_datasets_features,
-                fn_kwargs=dict(labels_max_len=None),
-            ).with_format("torch")
+            vectorized_train['train'] = (
+                raw_train['train']
+                .map(
+                    prepare_dataset,
+                    remove_columns=raw_datasets_features,
+                    fn_kwargs=dict(labels_max_len=None),
+                )
+                .with_format("torch")
+            )
         else:
-            vectorized_train['train'] = raw_train['train'].map(
-                prepare_dataset, remove_columns=raw_datasets_features,
-                num_proc=num_proc,
-                fn_kwargs=dict(labels_max_len=None),
-            ).with_format("torch")
+            vectorized_train['train'] = (
+                raw_train['train']
+                .map(
+                    prepare_dataset,
+                    remove_columns=raw_datasets_features,
+                    num_proc=num_proc,
+                    fn_kwargs=dict(labels_max_len=None),
+                )
+                .with_format("torch")
+            )
 
         if data_args.streaming_eval:
-            vectorized_eval['eval'] = raw_eval['eval'].map(
-                prepare_dataset, remove_columns=raw_datasets_features,
-                fn_kwargs=dict(labels_max_len=max_labels_length),
-            ).with_format("torch")
+            vectorized_eval['eval'] = (
+                raw_eval['eval']
+                .map(
+                    prepare_dataset,
+                    remove_columns=raw_datasets_features,
+                    fn_kwargs=dict(labels_max_len=max_labels_length),
+                )
+                .with_format("torch")
+            )
         else:
-            vectorized_eval['eval'] = raw_eval['eval'].map(
-                prepare_dataset, remove_columns=raw_datasets_features,
-                num_proc=num_proc,
-                fn_kwargs=dict(labels_max_len=max_labels_length),
-            ).with_format("torch")
+            vectorized_eval['eval'] = (
+                raw_eval['eval']
+                .map(
+                    prepare_dataset,
+                    remove_columns=raw_datasets_features,
+                    num_proc=num_proc,
+                    fn_kwargs=dict(labels_max_len=max_labels_length),
+                )
+                .with_format("torch")
+            )
 
         if training_args.do_train and data_args.streaming_train:
             # manually shuffle if streaming (done by the trainer for non-streaming)
@@ -631,7 +714,7 @@ def main():
         return labels_length <= max_labels_length
 
     if training_args.do_train:
-        # Filter items from train set only. 
+        # Filter items from train set only.
         # Should keep them in eval set not to affect eval metrics.
         vectorized_train['train'] = vectorized_train['train'].filter(
             is_audio_in_length_range,
@@ -641,7 +724,6 @@ def main():
             are_labels_in_length_range,
             input_columns=["labels_length"],
         )
-
 
     # 8. Load Metric
     metric = evaluate.load("wer")
@@ -667,7 +749,6 @@ def main():
 
         return {"wer": wer}
 
-
     # 9. Create a single speech processor
     if is_main_process(training_args.local_rank):
         # save feature extractor, tokenizer and config
@@ -677,13 +758,11 @@ def main():
 
     processor = AutoProcessor.from_pretrained(training_args.output_dir)
 
-
     # 10. Define data collator
     data_collator = DataCollatorSpeechSeq2SeqWithPadding(
         processor=processor,
         decoder_start_token_id=model.config.decoder_start_token_id,
     )
-
 
     # 11. Configure Trainer
     # Trainer callback to reinitialise and reshuffle the streamable datasets at the beginning of each epoch
@@ -693,8 +772,10 @@ def main():
             if isinstance(train_dataloader.dataset, IterableDatasetShard):
                 pass  # set_epoch() is handled by the Trainer
             elif isinstance(train_dataloader.dataset, IterableDataset):
-                logger.info(f'ShuffleCallback. shuffling train dataset. '
-                            f'seed: {training_args.seed}. dataset epoch: {train_dataloader.dataset._epoch}')
+                logger.info(
+                    f'ShuffleCallback. shuffling train dataset. '
+                    f'seed: {training_args.seed}. dataset epoch: {train_dataloader.dataset._epoch}'
+                )
                 train_dataloader.dataset.set_epoch(train_dataloader.dataset._epoch + 1)
 
     # Initialize Trainer
@@ -708,7 +789,6 @@ def main():
         compute_metrics=compute_metrics if training_args.predict_with_generate else None,
         callbacks=[ShuffleCallback()] if data_args.streaming_train else None,
     )
-
 
     # 12. Training
     if training_args.do_train:
@@ -728,7 +808,6 @@ def main():
         trainer.save_metrics("train", metrics)
         trainer.save_state()
 
-
     # 13. Evaluation
     results = {}
     if training_args.do_eval:
@@ -743,7 +822,6 @@ def main():
 
         trainer.log_metrics("eval", metrics)
         trainer.save_metrics("eval", metrics)
-
 
     # 14. Write Training Stats
     kwargs = {

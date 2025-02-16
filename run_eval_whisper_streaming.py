@@ -1,19 +1,17 @@
 import argparse
-import logging
-import sys
 import datetime
+import logging
 import os
+import sys
 
-import pandas as pd
-
-from transformers import pipeline
-from transformers.models.whisper.english_normalizer import BasicTextNormalizer
-from datasets import load_dataset, Audio
 import evaluate
 import jiwer
+import pandas as pd
+from datasets import Audio, load_dataset
+from transformers import pipeline
+from transformers.models.whisper.english_normalizer import BasicTextNormalizer
 
 from belarusian_text_normalizer import BelarusianTextNormalizer
-
 
 now_str = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
@@ -24,7 +22,7 @@ logging.basicConfig(
     datefmt="%m/%d/%Y %H:%M:%S",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler(filename=f'eval_{now_str}.log', mode='w')
+        logging.FileHandler(filename=f'eval_{now_str}.log', mode='w'),
     ],
 )
 logger.setLevel(logging.INFO)
@@ -35,7 +33,7 @@ text_normalizer = BelarusianTextNormalizer()
 
 
 def pull_columns(df: pd.DataFrame, cols) -> pd.DataFrame:
-    """ Pull columns to the beginning of the dataframe """
+    """Pull columns to the beginning of the dataframe"""
     if isinstance(cols, str):
         cols = [cols]
     cols = list(cols)
@@ -61,9 +59,13 @@ def normalise(sample, text_column: str):
     return sample
 
 
-def data(dataset,text_column: str):
+def data(dataset, text_column: str):
     for i, item in enumerate(dataset):
-        yield {**item["audio"], "reference_norm": item["reference_norm"], 'reference': item[text_column]}
+        yield {
+            **item["audio"],
+            "reference_norm": item["reference_norm"],
+            'reference': item[text_column],
+        }
 
 
 def clean_filename(filename: str):
@@ -77,10 +79,8 @@ def main(args):
     batch_size = args.batch_size
     whisper_asr = pipeline("automatic-speech-recognition", model=args.model_id, device=args.device)
 
-    whisper_asr.model.config.forced_decoder_ids = (
-        whisper_asr.tokenizer.get_decoder_prompt_ids(
-            language=args.language, task="transcribe"
-        )
+    whisper_asr.model.config.forced_decoder_ids = whisper_asr.tokenizer.get_decoder_prompt_ids(
+        language=args.language, task="transcribe"
     )
 
     logger.info('loading dataset')
@@ -126,23 +126,34 @@ def main(args):
         preds_fp = clean_filename(preds_fp)
         logger.info(f'saving predictions to: "{preds_fp}"')
 
-        preds_df = pd.DataFrame({
-            'audio_path': audio_paths, 
-            'prediction_norm': predictions_norm, 'reference_norm': references_norm,
-            'prediction': predictions, 'reference': references, 
-        })
+        preds_df = pd.DataFrame(
+            {
+                'audio_path': audio_paths,
+                'prediction_norm': predictions_norm,
+                'reference_norm': references_norm,
+                'prediction': predictions,
+                'reference': references,
+            }
+        )
 
         logger.info('computing WER for each item individually')
         preds_df['wer'] = preds_df.apply(
-            lambda row: 100 * jiwer.wer(
-                truth=row['reference_norm'], hypothesis=row['prediction_norm']),
-            axis=1
+            lambda row: 100
+            * jiwer.wer(truth=row['reference_norm'], hypothesis=row['prediction_norm']),
+            axis=1,
         )
         preds_df.sort_values('wer', ascending=False, inplace=True)
 
-        # use pull_columns instead of direct dataframe indexing 
+        # use pull_columns instead of direct dataframe indexing
         # not to delete any columns that could be added to dataframe in future.
-        cols_order = ['audio_path', 'wer', 'prediction_norm', 'reference_norm', 'prediction', 'reference']
+        cols_order = [
+            'audio_path',
+            'wer',
+            'prediction_norm',
+            'reference_norm',
+            'prediction',
+            'reference',
+        ]
         preds_df = pull_columns(preds_df, cols=cols_order)
 
         preds_df.to_excel(preds_fp, index=False)
@@ -153,18 +164,15 @@ def main(args):
         logger.info(f'updating model card and pushing to HuggingFace Hub')
         evaluate.push_to_hub(
             model_id=args.model_id,
-
             metric_value=wer,
             metric_type="wer",
             metric_name="WER",
-
             dataset_name=args.dataset,
             dataset_type=args.dataset,
             dataset_config=args.config,
             dataset_split=args.split,
-            
             task_type="automatic-speech-recognition",
-            task_name="Automatic Speech Recognition"
+            task_name="Automatic Speech Recognition",
         )
     else:
         logger.info('push_to_hub is False. will not update model card and push to HuggingFace Hub')
@@ -201,7 +209,7 @@ if __name__ == "__main__":
         "--text_column",
         type=str,
         required=True,
-        help="Dataset column name containing target transcription of an audiofile"
+        help="Dataset column name containing target transcription of an audiofile",
     )
     parser.add_argument(
         "--device",
@@ -237,13 +245,13 @@ if __name__ == "__main__":
         '--push_to_hub',
         type=bool,
         default=True,
-        help="Whether to update model card and push changes to HuggingFace Hub"
+        help="Whether to update model card and push changes to HuggingFace Hub",
     )
     parser.add_argument(
         '--save_predictions',
         type=bool,
         default=True,
-        help="Whether to store predictions and target transcriptions to a file"
+        help="Whether to store predictions and target transcriptions to a file",
     )
     args = parser.parse_args()
 

@@ -1,8 +1,8 @@
 import re
-import regex
 import unicodedata
-
 from typing import Iterable
+
+import regex
 
 
 class BelarusianTextNormalizer:
@@ -23,8 +23,10 @@ class BelarusianTextNormalizer:
         """
         if allowed_symbols is None:
             allowed_symbols = []
-        res = "".join(" " if unicodedata.category(c)[0] in "MSP" and c not in allowed_symbols else c 
-                      for c in unicodedata.normalize("NFKC", s))
+        res = "".join(
+            " " if unicodedata.category(c)[0] in "MSP" and c not in allowed_symbols else c
+            for c in unicodedata.normalize("NFKC", s)
+        )
         return res
 
     def __call__(self, s: str):
